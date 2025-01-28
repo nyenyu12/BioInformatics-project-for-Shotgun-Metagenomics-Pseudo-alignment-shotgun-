@@ -1,0 +1,12 @@
+# 0:30
+# Show usage instructions
+python3 main.py --help
+
+# 1:20
+# Convert a sudoku puzzle to our format and solve it
+python3 main.py --convert --input puzzle1.txt --output puzzle1.json
+python3 main.py --solve --input puzzle1.json
+
+# 2:00
+# Extension explaining solution
+python3 main.py --solve --explain --input puzzle1.json

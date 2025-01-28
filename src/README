@@ -1,0 +1,17 @@
+# Project Title / Student Name
+
+## Extensions:
+
+* Nice extension - does such and such.
+
+* Silly extension - does something else, but only works for prime numbers.
+
+Works by calling the perpetual motion library, which only works
+on prime numbers. Solving for composite numbers would also require
+a time machine.
+
+## Design
+
+We chose a perpetual motion machine over a time machine because
+of the aging cost of moving to the past, and the dangerous paradoxes
+which can arise.
