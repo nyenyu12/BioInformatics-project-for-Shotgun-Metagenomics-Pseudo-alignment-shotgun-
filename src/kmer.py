@@ -5,7 +5,7 @@ from data_files import FASTARecordContainer, FASTAFile
 
 
 class NotValidatingUniqueMapping(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message):
         super().__init__(message)
 
 

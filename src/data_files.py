@@ -4,17 +4,17 @@ from collections import namedtuple
 
 
 class NoRecordsInData(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message=""):
         super().__init__(message)
 
 
 class NoRecordsInDataFile(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message=""):
         super().__init__(message)
 
 
 class InvalidRecordData(Exception):
-    def __init__(self, message, errors):
+    def __init__(self, message=""):
         super().__init__(message)
 
 
@@ -48,6 +48,16 @@ class Record(object):
     def __getitem__(self, key):
         return self.__sections[key]
 
+    def __str__(self):
+        self_str = []
+        for section in self.__sections.keys():
+            self_str.append(f"{section}: {self.__sections[section]}")
+            
+        return '\n'.join(self_str)
+    
+    def __repr__(self):
+        return self.__str__()
+
 
 class RecordContainer(object):
 
@@ -57,11 +67,11 @@ class RecordContainer(object):
         if self.__class__.SECTION_SPECIFICATIONS == None:
             raise NotImplementedError("SECTION_SPECIFICATIONS must be defined.")
 
-        self.__re_pattern = []
-        self.create_record_re_pattern()
+        self.__re_pattern = None
+        self.create_record_re_string()
         self.__records = []
 
-    def create_record_re_pattern(self):
+    def create_record_re_string(self):
         self.__re_pattern = []
 
         for (
@@ -74,11 +84,11 @@ class RecordContainer(object):
             self.__re_pattern.append(f"(^{re.escape(section_header)})")
             if must_have_data:
                 self.__re_pattern.append(
-                    f"((?:({section_legal_chars})|({chars_to_remove}))+?)"
+                    f"((?:(?:{section_legal_chars})|(?:{chars_to_remove}))+?)"
                 )
             else:
                 self.__re_pattern.append(
-                    f"((?:({section_legal_chars})|({chars_to_remove}))*?)"
+                    f"((?:(?:{section_legal_chars})|(?:{chars_to_remove}))*?)"
                 )
 
         first_section_header = self.__class__.SECTION_SPECIFICATIONS[0].section_header
@@ -102,7 +112,7 @@ class RecordContainer(object):
         ):
             record_sections.append(
                 Section(
-                    section_name=specification.section_name,
+                    name=specification.section_name,
                     data=re.sub(
                         specification.chars_to_remove,
                         "",
