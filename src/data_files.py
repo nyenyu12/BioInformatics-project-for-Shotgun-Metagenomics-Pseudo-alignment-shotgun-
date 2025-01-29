@@ -3,7 +3,7 @@ import constants
 from collections import namedtuple
 
 UNTIL_NEXT_HEADER_OR_EOF = r"(?=(?=\r?\n{section_header})|(?=(?:\r?\n)?\Z))"
-
+UNPARSED_SNIPPET_LEN = 20
 
 class NoRecordsInData(Exception):
     def __init__(self, message="No valid records found in the data."):
@@ -17,6 +17,11 @@ class NoRecordsInDataFile(Exception):
 
 class InvalidRecordData(Exception):
     def __init__(self, message=""):
+        super().__init__(message)
+
+
+class UnparsedDataError(Exception):
+    def __init__(self, message="Unparsed data found in the input."):
         super().__init__(message)
 
 
@@ -114,12 +119,26 @@ class RecordContainer(object):
         print(self.__re_pattern)
 
     def parse_records(self, data):
-        for record_match in re.finditer(self.__re_pattern, data, flags=re.MULTILINE):
-            if any(record_match.groups()):
-                self.create_record(record_match.groups())
+        parsed_indices = set()
+        match_spans = []
+
+        for match in re.finditer(self.__re_pattern, data, flags=re.MULTILINE):
+            if any(match.groups()):
+                parsed_indices.update(range(match.start(), match.end()))
+                match_spans.append((match.start(), match.end()))
+                self.create_record(match.groups())
 
         if len(self._records) == 0:
             raise NoRecordsInData
+
+        unparsed_data = [
+            i for i in range(len(data)) if i not in parsed_indices and data[i].strip()
+        ]
+        if unparsed_data:
+            unparsed_snippet = data[min(unparsed_data) : min(unparsed_data) + UNPARSED_SNIPPET_LEN]
+            raise UnparsedDataError(
+                f"Unparsed data found at index {min(unparsed_data)}: {unparsed_snippet}..."
+            )
 
     def create_record(self, record_match_groups):
         sections = []

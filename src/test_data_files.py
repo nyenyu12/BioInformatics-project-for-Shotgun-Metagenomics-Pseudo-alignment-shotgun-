@@ -122,14 +122,13 @@ def test_record_container_create_record_invalid_data():
         container.parse_records(invalid_data)
 
 
-def test_FASTARecordContainer_parse_records_1():
+def test_FASTARecordContainer_parse_records_valid_data():
     container = FASTARecordContainer()
     data = (
         ">Header1\nAGCTAGCT\n"
         ">Header2\nGCGCGCGC\n"
         ">Header3\nAAAAAAANN\n"
         ">Header4\nAG N \r\nC\t \nTAGCT\n"
-        ">FalseHeader1\nAG a \r\nC\t \nTAGCT\n"
         ">Hea\tde r5\r\nAGCTAGCT\n"
     )
     container.parse_records(data)
@@ -146,6 +145,20 @@ def test_FASTARecordContainer_parse_records_1():
     assert records[3]["genome"] == "AGNCTAGCT"
     assert records[4]["description"] == "Hea\tde r5"
     assert records[4]["genome"] == "AGCTAGCT"
+
+
+def test_FASTARecordContainer_parse_records_invalid_data():
+    container = FASTARecordContainer()
+    data = (
+        ">Header1\nAGCTAGCT\n"
+        ">Header2\nGCGCGCGC\n"
+        ">Header3\nAAAAAAANN\n"
+        ">Header4\nAG N \r\nC\t \nTAGCT\n"
+        ">FalseHeader1\nAG a \r\nC\t \nTAGCT\n"
+        ">Hea\tde r5\r\nAGCTAGCT\n"
+    )
+    with pytest.raises(UnparsedDataError):
+        container.parse_records(data)
 
 
 def test_FASTAQRecordContainer_valid():
@@ -193,13 +206,13 @@ def test_FASTAQRecordContainer_valid():
         "@Read10\n"
         "TTTTTTTTTTTTTTTTTTTTAA\n"
         "+\n"
-        "IIIIIIIIIIIIIIIIIIIIII" # Should work with \r\n,\n ending and without
+        "IIIIIIIIIIIIIIIIIIIIII"  # Should work with \r\n,\n ending and without
     )
 
     container.parse_records(data)
     records = list(container)
 
-    print (records)
+    print(records)
     assert len(records) == 10
     assert records[0]["identifier"] == "Read1"
     assert records[0]["sequence"] == "GGGTGATGGCCGCTGCCGATGGCGTCAAATCCCACCAA"
@@ -226,14 +239,20 @@ def test_FASTAQRecordContainer_valid():
     assert records[5]["quality_sequence"] == "IIIIIIIIIIIIIIIIIIIIII"
 
     assert records[6]["identifier"] == "Read7"
-    assert records[6]["sequence"] == "TTTTTTTTTTTTTTTTTGCTGCAGATCGTGGGTTTATGGATGATGTAGTGTAGAGTGAGTAGTAGTGATGGATTATGGATTGATTGAGTCAGCCG"
+    assert (
+        records[6]["sequence"]
+        == "TTTTTTTTTTTTTTTTTGCTGCAGATCGTGGGTTTATGGATGATGTAGTGTAGAGTGAGTAGTAGTGATGGATTATGGATTGATTGAGTCAGCCG"
+    )
     assert (
         records[6]["quality_sequence"]
         == r"`1234567890-=qwertyuiop[]\asdfghjkl;'zxcvbnm,./~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?"
     )
 
     assert records[7]["identifier"] == "Read8"
-    assert records[7]["sequence"] == "TTTTTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAACCAGGGGGGGGGGGGGGGGGGGGGGGGGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCTTTTTTTTTTTTTTTTTTTTTT"
+    assert (
+        records[7]["sequence"]
+        == "TTTTTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAACCAGGGGGGGGGGGGGGGGGGGGGGGGGCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCTTTTTTTTTTTTTTTTTTTTTT"
+    )
     assert (
         records[7]["quality_sequence"]
         == r"`1234567890-=qwertyuiop[]\asdfghjkl;'zxcvbnm,./~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?IIIIIIIIIIIIIIIIIIIIII"
@@ -242,7 +261,7 @@ def test_FASTAQRecordContainer_valid():
     assert records[8]["identifier"] == "Read9"
     assert records[8]["sequence"] == "TTTTTTTTTTTTTTTTTTTTAA"
     assert records[8]["quality_sequence"] == "IIIIIIIIIIIIIIIIIIIIII"
-    
+
     assert records[9]["identifier"] == "Read10"
     assert records[9]["sequence"] == "TTTTTTTTTTTTTTTTTTTTAA"
     assert records[9]["quality_sequence"] == "IIIIIIIIIIIIIIIIIIIIII"
@@ -324,7 +343,26 @@ def test_FASTAQRecordContainer_whitespace_handling():
 
     with pytest.raises(NoRecordsInData):
         container.parse_records(data)
-    
+
+
+def test_FASTAQRecordContainer_parse_records_check_unparsed():
+    container = FASTAQRecordContainer()
+    data = (
+        "@Read1\n"
+        "GGGTGATGGCCGCTGCCGATGGCGTCAAATCCCACCAA\n"
+        "+\n"
+        "IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII\n"
+        "@Read2\n"
+        "ATCGATCGATCGATCGATCANA\n"
+        "+\n"
+        "IIIIIIIIIIIIIIIIIIIIII\n"
+        "@Read3\n"
+        "GCGCGCGCGCGCGCGCGCGCGG\n"
+        "+\n"
+        "IIIIIIIIIIIIIIIIIIIIII\n"
+    )
+    with pytest.raises(UnparsedDataError):
+        container.parse_records(data)
 
 
 test_FASTAQRecordContainer_valid()
