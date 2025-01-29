@@ -2,9 +2,11 @@ import re
 import constants
 from collections import namedtuple
 
+UNTIL_NEXT_HEADER_OR_EOF = r"(?=(?=\r?\n{section_header})|(?=(?:\r?\n)?\Z))"
+
 
 class NoRecordsInData(Exception):
-    def __init__(self, message=""):
+    def __init__(self, message="No valid records found in the data."):
         super().__init__(message)
 
 
@@ -18,11 +20,16 @@ class InvalidRecordData(Exception):
         super().__init__(message)
 
 
-# TODO: NEED TO ADD SECTION NAME to both and implement in code so we can access fields easily
 Section = namedtuple("Section", ["name", "data"])
 SectionSpecification = namedtuple(
     "SectionSpecifications",
-    ["section_name", "section_header", "must_have_data", "section_legal_chars", "chars_to_remove"],
+    [
+        "section_name",
+        "section_header",
+        "must_have_data",
+        "section_legal_chars",
+        "chars_to_remove",
+    ],
 )
 
 
@@ -52,9 +59,9 @@ class Record(object):
         self_str = []
         for section in self.__sections.keys():
             self_str.append(f"{section}: {self.__sections[section]}")
-            
-        return '\n'.join(self_str)
-    
+
+        return "\n".join(self_str)
+
     def __repr__(self):
         return self.__str__()
 
@@ -69,10 +76,11 @@ class RecordContainer(object):
 
         self.__re_pattern = None
         self.create_record_re_string()
-        self.__records = []
+        self._records = []
 
     def create_record_re_string(self):
         self.__re_pattern = []
+        is_first_header = True
 
         for (
             _,
@@ -81,50 +89,56 @@ class RecordContainer(object):
             section_legal_chars,
             chars_to_remove,
         ) in self.__class__.SECTION_SPECIFICATIONS:
-            self.__re_pattern.append(f"(^{re.escape(section_header)})")
+            if is_first_header:
+                self.__re_pattern.append(f"^{re.escape(section_header)}")
+                is_first_header = False
+            else:
+                self.__re_pattern.append(rf"\r?\n{re.escape(section_header)}")
             if must_have_data:
                 self.__re_pattern.append(
-                    f"((?:(?:{section_legal_chars})|(?:{chars_to_remove}))+?)"
+                    f"((?:[{section_legal_chars}{chars_to_remove}])+?)"
                 )
             else:
                 self.__re_pattern.append(
-                    f"((?:(?:{section_legal_chars})|(?:{chars_to_remove}))*?)"
+                    f"((?:{section_legal_chars}{chars_to_remove}])*?)"
                 )
 
-        first_section_header = self.__class__.SECTION_SPECIFICATIONS[0].section_header
-        self.__re_pattern.append(f"(?:(?:^{re.escape(first_section_header)})|\\Z)")
+        first_section_header = re.escape(
+            self.__class__.SECTION_SPECIFICATIONS[0].section_header
+        )
+        self.__re_pattern.append(
+            UNTIL_NEXT_HEADER_OR_EOF.format(section_header=first_section_header)
+        )
 
         self.__re_pattern = "".join(self.__re_pattern)
         print(self.__re_pattern)
 
     def parse_records(self, data):
         for record_match in re.finditer(self.__re_pattern, data, flags=re.MULTILINE):
-            self.create_record(record_match)
+            if any(record_match.groups()):
+                self.create_record(record_match.groups())
 
-        if len(self.__records) == 0:
+        if len(self._records) == 0:
             raise NoRecordsInData
 
-    def create_record(self, record_match):
-        record_sections = []
-        for specification, i in zip(
-            self.__class__.SECTION_SPECIFICATIONS,
-            range(1, len(record_match.groups()), 3),
-        ):
-            record_sections.append(
+    def create_record(self, record_match_groups):
+        sections = []
+
+        for i, spec in enumerate(self.__class__.SECTION_SPECIFICATIONS):
+            # print (spec.section_name, i, record_match_groups[i])
+            raw_data = record_match_groups[i] or ""
+            cleaned_data = re.sub(spec.chars_to_remove, "", raw_data)
+
+            sections.append(
                 Section(
-                    name=specification.section_name,
-                    data=re.sub(
-                        specification.chars_to_remove,
-                        "",
-                        record_match.group(i + 1) or "",
-                    ),
+                    name=spec.section_name,
+                    data=cleaned_data.strip(),
                 )
             )
-
-        self.__records.append(Record(record_sections))
+        self._records.append(Record(sections))
 
     def __iter__(self):
-        for record in self.__records:
+        for record in self._records:
             yield record
 
 
@@ -135,7 +149,7 @@ class FASTARecordContainer(RecordContainer):
             section_name="description",
             section_header=">",
             must_have_data=True,
-            section_legal_chars=".",
+            section_legal_chars=r"\S\t ",
             chars_to_remove="",
         ),
         SectionSpecification(
@@ -158,14 +172,14 @@ class FASTAQRecordContainer(RecordContainer):
             section_name="identifier",
             section_header="@",
             must_have_data=True,
-            section_legal_chars=".",
+            section_legal_chars=r"\S\t ",
             chars_to_remove="",
         ),
         SectionSpecification(
             section_name="sequence",
             section_header="",
             must_have_data=True,
-            section_legal_chars=f"[{re.escape("".join(constants.REAL_NUCLEOTIDES_CHARS))}]",
+            section_legal_chars=f"{re.escape("".join(constants.REAL_NUCLEOTIDES_CHARS))}",
             chars_to_remove="",
         ),
         SectionSpecification(
@@ -179,16 +193,21 @@ class FASTAQRecordContainer(RecordContainer):
             section_name="quality_sequence",
             section_header="",
             must_have_data=True,
-            section_legal_chars=f"[{re.escape("".join(constants.PHRED33_SCORES.keys()))}]",
+            section_legal_chars=f"{re.escape("".join(constants.PHRED33_SCORES.keys()))}",
             chars_to_remove="",
         ),
     )
 
     def __init__(self):
         super().__init__()
-        for record in self.__records:
+
+    def parse_records(self, data):
+        super().parse_records(data)
+        for i, record in enumerate(self):
             if len(record["sequence"]) != len(record["quality_sequence"]):
-                raise InvalidRecordData("Mismatch between nucleotide and PHRED section lengths.")
+                raise InvalidRecordData(
+                    f"Mismatch in record {i + 1} between nucleotide length: {len(record["sequence"])} and PHRED section lengths: {len(record["quality_sequence"])}"
+                )
 
     # TODO: maybe need to seperate identifier from description in @
 
@@ -217,11 +236,13 @@ class DataFile:
     def __iter__(self):
         return iter(self.container)
 
+
 class FASTAFile(DataFile):
     EXTENSIONS = {".fa", ".fa.gz"}
 
     def get_container(self):
         return FASTARecordContainer()
+
 
 class FASTAQFile(DataFile):
     EXTENSIONS = {".fq", ".fq.gz"}
