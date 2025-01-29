@@ -81,12 +81,26 @@ class KmerReference(object):
             if k_mer in positions
         }
 
+
 class Read:
     def __init__(self, fastaq_record):
         self.mapping = ReadMapping(ReadMappingType.UNMAPPED, None)
         self.k_mers = {}
         self.__raw_read = fastaq_record["sequence"]
         self.__genomes_map_count = None
+
+    def __str__(self):
+        rows = [f"Mapping: {self.mapping}"]
+        for k_mer in self.k_mers.keys():
+            rows.append(f"k-mer: {k_mer}")
+            rows.append(f"specifity: {self.k_mers[k_mer].specifity}")
+            rows.append(f"Genome References:")
+            for references in self.k_mers[k_mer]:
+                rows.append(f"\t{references}")
+        return "\n".join(rows)
+
+    def __repr__(self):
+        return self.__str__()
 
     def extract_kmer_references(self, k_mer_reference):
         for _, k_mer in extract_k_mers_from_genome(
@@ -136,10 +150,31 @@ class Read:
         )
         return False
 
+    def validate_unique_mappings(self, p):
+        if self.mapping.type != ReadMappingType.UNIQUELY_MAPPED:
+            return  # Skip validation if not uniquely mapped
+
+        genome_total_counts = self.generate_genome_counts(map_count=False)
+        mapped_genome = self.mapping.genome_mapped_to
+        max_total_kmers = max(genome_total_counts.values(), default=0)
+        mapped_genome_kmers = genome_total_counts.get(mapped_genome, 0)
+        print ("fsadaf")
+        print (mapped_genome_kmers,max_total_kmers)
+        print (mapped_genome)
+        if max_total_kmers - mapped_genome_kmers > p:
+            ambiguous_genomes = [mapped_genome]
+            for genome, count in genome_total_counts.items():
+                if count >= mapped_genome_kmers:
+                    ambiguous_genomes.append(genome)
+            self.mapping = ReadMapping(
+                ReadMappingType.AMBIGUOUSLY_MAPPED, ambiguous_genomes
+            )
+
     def pseudo_align(self, k_mer_reference, p=1, m=1):
         self.extract_kmer_references(k_mer_reference)
         if not self.k_mers:
             return ReadMappingType.UNMAPPED
         if self.try_to_align_specific(m):
+            self.validate_unique_mappings(p)
             return self.mapping.type
         return ReadMappingType.AMBIGUOUSLY_MAPPED

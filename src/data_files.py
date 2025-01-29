@@ -125,7 +125,7 @@ class RecordContainer(object):
         )
 
         self.__re_pattern = "".join(self.__re_pattern)
-        print(self.__re_pattern)
+        #print(self.__re_pattern)
 
     def parse_records(self, data):
         parsed_indices = set()
