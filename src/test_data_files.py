@@ -167,6 +167,21 @@ def test_mock_record_container_valid():
     assert records[0]["header"] == "AGCTAGCT"
     assert records[1]["header"] == "AGCTTGCT"
     
+def test_mock_record_container_valid_endings():
+    data_cases = [
+        ">AGCTAGCT\nAGCTAGCT\n",
+        ">AGCTAGCT\nAGCTAGCT\r\n",
+        ">AGCTAGCT\nAGCTAGCT"
+    ]
+    
+    for data in data_cases:
+        container = MockRecordContainer()
+        container.parse_records(data)
+        records = list(container)
+        assert len(records) == 1
+        assert records[0]["header"] == "AGCTAGCT"
+        assert records[0]["sequence"] == "AGCTAGCT"
+        
 def test_FASTARecordContainer_parse_records_valid_data():
     container = FASTARecordContainer()
     data = (
