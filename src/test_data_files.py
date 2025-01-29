@@ -21,12 +21,14 @@ def test_section_specification_creation():
         must_have_data=True,
         section_legal_chars="[AGCT]",
         chars_to_remove="\\s",
+        is_unique_index=False
     )
     assert spec.section_name == "header"
     assert spec.section_header == ">"
     assert spec.must_have_data is True
     assert spec.section_legal_chars == "[AGCT]"
     assert spec.chars_to_remove == "\\s"
+    assert spec.is_unique_index == False
 
 
 # Test Record class
@@ -69,6 +71,7 @@ class MockRecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars="AGCT",
             chars_to_remove="",
+            is_unique_index=True
         ),
         SectionSpecification(
             section_name="sequence",
@@ -76,6 +79,7 @@ class MockRecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars="AGCT",
             chars_to_remove="\\s",
+            is_unique_index=False
         ),
     )
 
@@ -92,20 +96,20 @@ def test_record_container_parse_records():
     container = MockRecordContainer()
     data = (
         ">AGCTAGCT\nAGCTAGCT\n"
-        ">AGCTAGCT\nGCGCGCGC\n"
+        ">AGCTTGCT\nGCGCGCGC\n"
         ">AAAAAAG\nAG A\t\tAGCT\n"
-        ">AGCTAGCT\nGCGCGCGC"
+        ">AGCTGGCT\nGCGCGCGC"
     )
     container.parse_records(data)
     records = list(container)
     assert len(records) == 4
     assert records[0]["header"] == "AGCTAGCT"
     assert records[0]["sequence"] == "AGCTAGCT"
-    assert records[1]["header"] == "AGCTAGCT"
+    assert records[1]["header"] == "AGCTTGCT"
     assert records[1]["sequence"] == "GCGCGCGC"
     assert records[2]["header"] == "AAAAAAG"
     assert records[2]["sequence"] == "AGAAGCT"
-    assert records[3]["header"] == "AGCTAGCT"
+    assert records[3]["header"] == "AGCTGGCT"
     assert records[3]["sequence"] == "GCGCGCGC"
 
 
@@ -121,7 +125,48 @@ def test_record_container_create_record_invalid_data():
     with pytest.raises(NoRecordsInData):
         container.parse_records(invalid_data)
 
+def test_mock_record_container_duplicate():
+    container = MockRecordContainer()
+    data = (
+        ">AGCTAGCT\nAGCTAGCT\n"
+        ">AGCTAGCT\nGCGCGCGC\n"
+    )
+    with pytest.raises(DuplicateRecordError):
+        container.parse_records(data)
 
+def test_mock_record_container_valid():
+    container = MockRecordContainer()
+    data = (
+        ">AGCTAGCT\nAGCTAGCT\n"
+        ">AGCTTGCT\nGCGCGCGC\n"
+    )
+    container.parse_records(data)
+    records = list(container)
+    assert len(records) == 2
+    assert records[0]["header"] == "AGCTAGCT"
+    assert records[1]["header"] == "AGCTTGCT"
+    
+def test_mock_record_container_duplicate():
+    container = MockRecordContainer()
+    data = (
+        ">AGCTAGCT\nAGCTAGCT\n"
+        ">AGCTAGCT\nGCGCGCGC\n"
+    )
+    with pytest.raises(DuplicateRecordError):
+        container.parse_records(data)
+
+def test_mock_record_container_valid():
+    container = MockRecordContainer()
+    data = (
+        ">AGCTAGCT\nAGCTAGCT\n"
+        ">AGCTTGCT\nGCGCGCGC\n"
+    )
+    container.parse_records(data)
+    records = list(container)
+    assert len(records) == 2
+    assert records[0]["header"] == "AGCTAGCT"
+    assert records[1]["header"] == "AGCTTGCT"
+    
 def test_FASTARecordContainer_parse_records_valid_data():
     container = FASTARecordContainer()
     data = (
