@@ -5,6 +5,7 @@ from collections import namedtuple
 UNTIL_NEXT_HEADER_OR_EOF = r"(?=(?=\r?\n{section_header})|(?=(?:\r?\n)?\Z))"
 UNPARSED_SNIPPET_LEN = 20
 
+
 class NoRecordsInData(Exception):
     def __init__(self, message="No valid records found in the data."):
         super().__init__(message)
@@ -19,10 +20,12 @@ class InvalidRecordData(Exception):
     def __init__(self, message=""):
         super().__init__(message)
 
+
 class DuplicateRecordError(Exception):
     def __init__(self, message="Duplicate records found for the unique index."):
         super().__init__(message)
-        
+
+
 class UnparsedDataError(Exception):
     def __init__(self, message="Unparsed data found in the input."):
         super().__init__(message)
@@ -98,7 +101,7 @@ class RecordContainer(object):
             must_have_data,
             section_legal_chars,
             chars_to_remove,
-            _
+            _,
         ) in self.__class__.SECTION_SPECIFICATIONS:
             if is_first_header:
                 self.__re_pattern.append(f"^{re.escape(section_header)}")
@@ -141,7 +144,9 @@ class RecordContainer(object):
             i for i in range(len(data)) if i not in parsed_indices and data[i].strip()
         ]
         if unparsed_data:
-            unparsed_snippet = data[min(unparsed_data) : min(unparsed_data) + UNPARSED_SNIPPET_LEN]
+            unparsed_snippet = data[
+                min(unparsed_data) : min(unparsed_data) + UNPARSED_SNIPPET_LEN
+            ]
             raise UnparsedDataError(
                 f"Unparsed data found at index {min(unparsed_data)}: {unparsed_snippet}..."
             )
@@ -160,12 +165,14 @@ class RecordContainer(object):
                     data=cleaned_data,
                 )
             )
-            
+
             if spec.is_unique_index:
                 if cleaned_data in self._unique_index_values:
-                    raise DuplicateRecordError(f"Duplicate record found with unique index: {cleaned_data}")
+                    raise DuplicateRecordError(
+                        f"Duplicate record found with unique index: {cleaned_data}"
+                    )
                 self._unique_index_values.add(cleaned_data)
-                
+
         self._records.append(Record(sections))
 
     def __iter__(self):
@@ -182,7 +189,7 @@ class FASTARecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars=r"\S\t ",
             chars_to_remove="",
-            is_unique_index=False
+            is_unique_index=False,
         ),
         SectionSpecification(
             section_name="genome",
@@ -190,7 +197,7 @@ class FASTARecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars=constants.NUCLEOTIDES_CHARS,
             chars_to_remove=r"\s",
-            is_unique_index=False
+            is_unique_index=False,
         ),
     )
 
@@ -207,7 +214,7 @@ class FASTAQRecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars=r"\S\t ",
             chars_to_remove="",
-            is_unique_index=True
+            is_unique_index=True,
         ),
         SectionSpecification(
             section_name="sequence",
@@ -215,7 +222,7 @@ class FASTAQRecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars=f"{re.escape("".join(constants.REAL_NUCLEOTIDES_CHARS))}",
             chars_to_remove="",
-            is_unique_index=False
+            is_unique_index=False,
         ),
         SectionSpecification(
             section_name="space",
@@ -223,7 +230,7 @@ class FASTAQRecordContainer(RecordContainer):
             must_have_data=False,
             section_legal_chars=".",
             chars_to_remove="",
-            is_unique_index=False
+            is_unique_index=False,
         ),
         SectionSpecification(
             section_name="quality_sequence",
@@ -231,7 +238,7 @@ class FASTAQRecordContainer(RecordContainer):
             must_have_data=True,
             section_legal_chars=f"{re.escape("".join(constants.PHRED33_SCORES.keys()))}",
             chars_to_remove="",
-            is_unique_index=False
+            is_unique_index=False,
         ),
     )
 
