@@ -20,10 +20,10 @@ class DataFile:
                 f"Invalid file extension. Expected one of {self.__class__.EXTENSIONS}, got {file_path}"
             )
 
-        self.container = self.get_container()
+        self.container = self.get_container_type()
         self.parse_file(file_path)
 
-    def get_container(self):
+    def get_container_type(self):
         raise NotImplementedError("This method must be implemented in subclasses.")
 
     def parse_file(self, file_path):
@@ -39,14 +39,14 @@ class DataFile:
 
     def dump(self, output_file):
         """Dumps the parsed data into a JSON file."""
-        with open(output_file, "w", encoding="utf-8") as f:
-            pickle.dump([record.__dict__ for record in self.container], f, indent=4)
+        with open(output_file, "wb") as f:
+            pickle.dump(self.container, f)
 
 
 class FASTAFile(DataFile):
     EXTENSIONS = {".fa", ".fa.gz"}
 
-    def get_container(self):
+    def get_container_type(self):
         return FASTARecordContainer()
 
     def load_file(self, file_path):
@@ -62,15 +62,11 @@ class FASTAFile(DataFile):
         """Loads a FASTA file and parses it."""
         self.parse_file(file_path)
 
-    def get_genome_records(self):
-        """Returns the parsed genome records."""
-        return list(self.container)
-
 
 class FASTAQFile(DataFile):
     EXTENSIONS = {".fq", ".fq.gz"}
 
-    def get_container(self):
+    def get_container_type(self):
         return FASTAQRecordContainer()
 
     def load_file(self, file_path):
@@ -85,7 +81,3 @@ class FASTAQFile(DataFile):
     def load(self, file_path):
         """Loads a FASTQ file and parses it."""
         self.parse_file(file_path)
-
-    def get_read_records(self):
-        """Returns the parsed read records."""
-        return list(self.container)
