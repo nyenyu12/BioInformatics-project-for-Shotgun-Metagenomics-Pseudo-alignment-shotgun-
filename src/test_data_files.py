@@ -1,7 +1,7 @@
 import pytest
 import gzip
 import pickle
-from data_file import FASTAFile, FASTAQFile, NoRecordsInDataFile
+from data_file import FASTAFile, FASTAQFile, NoRecordsInDataFile, InvalidExtensionError
 
 def test_fasta_file_loading(tmp_path):
     fasta_content = ">Genome1\nAGCTAGCTAGCTA\n>Genome2\nTGCATGCATGCA\n"
@@ -25,7 +25,7 @@ def test_fasta_file_invalid_extension(tmp_path):
     invalid_path = tmp_path / "test.txt"
     invalid_path.write_text(">Genome1\nAGCTAGCTAGCTA\n")
     
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidExtensionError):
         FASTAFile(str(invalid_path))
 
 def test_fastq_file_loading(tmp_path):
@@ -50,7 +50,7 @@ def test_fastq_file_invalid_extension(tmp_path):
     invalid_path = tmp_path / "test.txt"
     invalid_path.write_text("@Read1\nAGCTAGCT\n+\nIIIIIIII\n")
     
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidExtensionError):
         FASTAQFile(str(invalid_path))
 
 def test_no_records_in_fasta_file(tmp_path):

@@ -8,7 +8,10 @@ from records import (
     RecordContainer,
 )
 
-
+class InvalidExtensionError(Exception):
+    def __init__(self, message=""):
+        super().__init__(message)
+        
 class NoRecordsInDataFile(Exception):
     def __init__(self, message=""):
         super().__init__(message)
@@ -22,7 +25,7 @@ class DataFile:
             raise NotImplementedError("EXTENSIONS must be defined.")
 
         if not any(file_path.endswith(ext) for ext in self.__class__.EXTENSIONS):
-            raise ValueError(
+            raise InvalidExtensionError(
                 f"Invalid file extension. Expected one of {self.__class__.EXTENSIONS}, got {file_path}"
             )
 

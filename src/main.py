@@ -1,13 +1,34 @@
 #!/usr/bin/env python3
-
+import os
 import argparse
 import pickle
 import gzip
 import sys
 import json
 
-from data_file import FASTAFile, FASTAQFile
-from kmer import KmerReference, PseudoAlignment
+from data_file import FASTAFile, FASTAQFile, InvalidExtensionError, NoRecordsInDataFile
+from kmer import KmerReference, PseudoAlignment, NotValidatingUniqueMapping, AddingExistingRead
+
+
+def validate_file_readable(filepath: str, description: str):
+    """Check if a file exists and is readable."""
+    if not os.path.isfile(filepath):
+        sys.exit(
+            f"Error: {description} file '{filepath}' does not exist or is not a file."
+        )
+    if not os.access(filepath, os.R_OK):
+        sys.exit(f"Error: {description} file '{filepath}' is not readable.")
+
+
+def validate_file_writable(filepath: str, description: str):
+    """Check if a file is writable (or if the directory is writable)."""
+    dir_path = os.path.dirname(filepath) or "."
+    if os.path.exists(filepath) and not os.access(filepath, os.W_OK):
+        sys.exit(f"Error: {description} file '{filepath}' is not writable.")
+    if not os.path.exists(filepath) and not os.access(dir_path, os.W_OK):
+        sys.exit(
+            f"Error: Directory '{dir_path}' is not writable to create {description} file '{filepath}'."
+        )
 
 
 def parse_arguments(args=None):
@@ -110,14 +131,10 @@ def dump_alignment_from_reference(reference_file, reads_file, m, p):
     with gzip.open(reference_file, "rb") as f:
         kmer_reference = pickle.load(f)
 
-    # Load the reads and perform alignment
     reads_container = FASTAQFile(reads_file).container
     pseudo_alignment = PseudoAlignment(kmer_reference)
     pseudo_alignment.align_reads_from_container(reads_container, m, p)
-
-    # Dump results
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
-
 
 def build_reference_align_and_dump(fasta_file, kmer_size, reads_file, m, p):
     kmer_reference = create_reference(fasta_file, kmer_size)
@@ -126,59 +143,73 @@ def build_reference_align_and_dump(fasta_file, kmer_size, reads_file, m, p):
     pseudo_alignment.align_reads_from_container(reads_container, m, p)
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
 
-
 def main():
     args = parse_arguments()
 
-    if args.task == "reference":
-        if not args.genomefile or not args.kmer_size or not args.referencefile:
-            sys.exit(
-                "Error: -g (genome file), -k (kmer size), and -r (reference file) are required for this task."
+    try:
+        if args.task == "reference":
+            if not args.genomefile or not args.kmer_size or not args.referencefile:
+                sys.exit(
+                    "Error: -g (genome file), -k (kmer size), and -r (reference file) are required for this task."
+                )
+            validate_file_readable(args.genomefile, "Genome FASTA")
+            validate_file_writable(args.referencefile, "Reference database output")
+            create_reference_and_save_it(
+                args.genomefile, args.kmer_size, args.referencefile
             )
-        create_reference_and_save_it(
-            args.genomefile, args.kmer_size, args.referencefile
-        )
-    elif args.task == "dumpref":
-        if args.referencefile:
-            dump_reference_file(args.referencefile)
-        elif args.genomefile and args.kmer_size:
-            build_reference_and_dump_from_file(args.genomefile, args.kmer_size)
-        else:
-            sys.exit(
-                "Error: Either -r (reference file) or -g (genome file) and -k (kmer size) are required for this task."
-            )
-    elif args.task == "align":
-        if args.referencefile and args.reads and args.alignfile:
-            create_alignment_from_reference_file(
-                args.referencefile,
-                args.reads,
-                args.alignfile,
-                args.unique_threshold,
-                args.ambiguous_threshold,
-            )
-        elif args.genomefile and args.kmer_size and args.reads and args.alignfile:
-            build_reference_and_create_alignment_file(
-                args.genomefile,
-                args.kmer_size,
-                args.reads,
-                args.alignfile,
-                args.unique_threshold,
-                args.ambiguous_threshold,
-            )
-        else:
-            sys.exit(
-                "Error: Either provide -r (reference file) or -g (genome file) and -k (kmer size) along with --reads and -a (alignment output file)."
-            )
-    elif args.task == "dumpalign":
-        if args.referencefile and args.reads:
-            dump_alignment_from_reference(
-                args.referencefile,
-                args.reads,
-                args.unique_threshold,
-                args.ambiguous_threshold,
-            )
+        elif args.task == "dumpref":
+            if args.referencefile:
+                validate_file_readable(args.referencefile, "Reference database")
+                dump_reference_file(args.referencefile)
+                
+            elif args.genomefile and args.kmer_size:
+                validate_file_readable(args.genomefile, "Genome FASTA")
+                build_reference_and_dump_from_file(args.genomefile, args.kmer_size)
+            else:
+                sys.exit(
+                    "Error: Either -r (reference file) or -g (genome file) and -k (kmer size) are required for this task."
+                )
+        elif args.task == "align":
+            validate_file_readable(args.reads, "FASTQ reads")
+            validate_file_writable(args.alignfile, "Alignment output")
+            
+            if args.referencefile and args.reads and args.alignfile:
+                validate_file_readable(args.referencefile, "Reference database")
+                create_alignment_from_reference_file(
+                    args.referencefile,
+                    args.reads,
+                    args.alignfile,
+                    args.unique_threshold,
+                    args.ambiguous_threshold,
+                )
+            elif args.genomefile and args.kmer_size and args.reads and args.alignfile:
+                validate_file_readable(args.genomefile, "Genome FASTA")
+                build_reference_and_create_alignment_file(
+                    args.genomefile,
+                    args.kmer_size,
+                    args.reads,
+                    args.alignfile,
+                    args.unique_threshold,
+                    args.ambiguous_threshold,
+                )
+            else:
+                sys.exit(
+                    "Error: Either provide -r (reference file) or -g (genome file) and -k (kmer size) along with --reads and -a (alignment output file)."
+                )
         elif args.task == "dumpalign":
+            if args.referencefile and args.reads:
+                validate_file_readable(args.reads, "FASTQ reads")
+                validate_file_writable(args.alignfile, "Alignment output")
+            
+                dump_alignment_from_reference(
+                    args.referencefile,
+                    args.reads,
+                    args.unique_threshold,
+                    args.ambiguous_threshold,
+                )
             if args.genomefile and args.kmer_size and args.reads:
+                validate_file_readable(args.reads, "FASTQ reads")
+                validate_file_readable(args.genomefile, "Genome FASTA")
                 build_reference_align_and_dump(
                     args.genomefile,
                     args.kmer_size,
@@ -187,14 +218,16 @@ def main():
                     args.ambiguous_threshold,
                 )
             elif args.alignfile:
+                validate_file_writable(args.alignfile, "Alignment output")
                 dump_alignment_file(args.alignfile)
             else:
                 sys.exit(
                     "Error: Provide either -g (genome file) and -k (kmer size) with --reads (FASTQ file), or -a (alignment output file)."
                 )
-    else:
-        sys.exit("Error: Unsupported task.")
-
+        else:
+            sys.exit("Error: Unsupported task.")
+    except (InvalidExtensionError , NoRecordsInDataFile, NotValidatingUniqueMapping, AddingExistingRead) as err:
+        sys.exit(err)
 
 if __name__ == "__main__":
     main()
