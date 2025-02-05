@@ -139,24 +139,6 @@ def test_mock_record_container_valid():
     assert records[0]["header"] == "AGCTAGCT"
     assert records[1]["header"] == "AGCTTGCT"
 
-
-def test_mock_record_container_duplicate():
-    container = MockRecordContainer()
-    data = ">AGCTAGCT\nAGCTAGCT\n" ">AGCTAGCT\nGCGCGCGC\n"
-    with pytest.raises(DuplicateRecordError):
-        container.parse_records(data)
-
-
-def test_mock_record_container_valid():
-    container = MockRecordContainer()
-    data = ">AGCTAGCT\nAGCTAGCT\n" ">AGCTTGCT\nGCGCGCGC\n"
-    container.parse_records(data)
-    records = list(container)
-    assert len(records) == 2
-    assert records[0]["header"] == "AGCTAGCT"
-    assert records[1]["header"] == "AGCTTGCT"
-
-
 def test_mock_record_container_valid_endings():
     data_cases = [
         ">AGCTAGCT\nAGCTAGCT\n",

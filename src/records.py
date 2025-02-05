@@ -1,6 +1,7 @@
 import re
 import constants
 from collections import namedtuple
+from typing import Iterator, List, Tuple, Union, Dict, Set, Any
 
 UNTIL_NEXT_HEADER_OR_EOF = r"(?=(?=\r?\n{section_header})|(?=(?:\r?\n)?\Z))"
 UNPARSED_SNIPPET_LEN = 20
@@ -28,7 +29,7 @@ class UnparsedDataError(Exception):
 
 Section = namedtuple("Section", ["name", "data"])
 SectionSpecification = namedtuple(
-    "SectionSpecifications",
+    "SectionSpecification",
     [
         "section_name",
         "section_header",
@@ -42,14 +43,14 @@ SectionSpecification = namedtuple(
 
 class Record(object):
 
-    def __init__(self, sections):
+    def __init__(self, sections: List[Section]):
         if len(sections) == 0:
             raise InvalidRecordData(
                 "The data given to construct record has no sections."
             )
 
-        self.identifier = sections[0].data
-        self.__sections = {}
+        self.identifier: str = sections[0].data
+        self.__sections: Dict[str, str] = {}
 
         for section in sections:
             if section.name in self.__sections:
@@ -59,7 +60,7 @@ class Record(object):
 
             self.__sections[section.name] = section.data
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> str:
         return self.__sections[key]
 
     def __str__(self):
@@ -81,10 +82,10 @@ class RecordContainer(object):
         if self.__class__.SECTION_SPECIFICATIONS == None:
             raise NotImplementedError("SECTION_SPECIFICATIONS must be defined.")
 
-        self.__re_pattern = None
+        self.__re_pattern: str = None
         self.create_record_re_string()
-        self._unique_index_values = set()
-        self._records = []
+        self._unique_index_values: Set[str] = set()
+        self._records: List[Record] = []
 
     def create_record_re_string(self):
         self.__re_pattern = []
@@ -122,8 +123,8 @@ class RecordContainer(object):
         self.__re_pattern = "".join(self.__re_pattern)
         # print(self.__re_pattern)
 
-    def parse_records(self, data):
-        parsed_indices = set()
+    def parse_records(self, data: str):
+        parsed_indices: Set[int] = set()
         match_spans = []
 
         for match in re.finditer(self.__re_pattern, data, flags=re.MULTILINE):
@@ -146,11 +147,10 @@ class RecordContainer(object):
                 f"Unparsed data found at index {min(unparsed_data)}: {unparsed_snippet}..."
             )
 
-    def create_record(self, record_match_groups):
+    def create_record(self, record_match_groups: Union[Tuple[str, Any], Tuple[str, str, str, str]]):
         sections = []
 
         for i, spec in enumerate(self.__class__.SECTION_SPECIFICATIONS):
-            # print (spec.section_name, i, record_match_groups[i])
             raw_data = record_match_groups[i] or ""
             cleaned_data = re.sub(spec.chars_to_remove, "", raw_data).strip()
 
@@ -170,7 +170,7 @@ class RecordContainer(object):
 
         self._records.append(Record(sections))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Record]:
         for record in self._records:
             yield record
 
@@ -240,7 +240,7 @@ class FASTAQRecordContainer(RecordContainer):
     def __init__(self):
         super().__init__()
 
-    def parse_records(self, data):
+    def parse_records(self, data: str):
         super().parse_records(data)
         for i, record in enumerate(self):
             if len(record["sequence"]) != len(record["quality_sequence"]):

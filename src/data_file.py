@@ -1,6 +1,12 @@
 import gzip
 import pickle
-from records import FASTARecordContainer, FASTAQRecordContainer, NoRecordsInData
+from typing import Set, Union
+from records import (
+    FASTARecordContainer,
+    FASTAQRecordContainer,
+    NoRecordsInData,
+    RecordContainer,
+)
 
 
 class NoRecordsInDataFile(Exception):
@@ -9,9 +15,9 @@ class NoRecordsInDataFile(Exception):
 
 
 class DataFile:
-    EXTENSIONS = None
+    EXTENSIONS: Union[Set[str], None] = None
 
-    def __init__(self, file_path):
+    def __init__(self, file_path: str):
         if not self.__class__.EXTENSIONS:
             raise NotImplementedError("EXTENSIONS must be defined.")
 
@@ -20,13 +26,13 @@ class DataFile:
                 f"Invalid file extension. Expected one of {self.__class__.EXTENSIONS}, got {file_path}"
             )
 
-        self.container = self.get_container_type()
+        self.container: RecordContainer = self.get_container_type()
         self.parse_file(file_path)
 
     def get_container_type(self):
         raise NotImplementedError("This method must be implemented in subclasses.")
 
-    def parse_file(self, file_path):
+    def parse_file(self, file_path: str):
         try:
             data = self.load_file(file_path)
             self.container.parse_records(data)
@@ -46,10 +52,10 @@ class DataFile:
 class FASTAFile(DataFile):
     EXTENSIONS = {".fa", ".fa.gz"}
 
-    def get_container_type(self):
+    def get_container_type(self) -> FASTARecordContainer:
         return FASTARecordContainer()
 
-    def load_file(self, file_path):
+    def load_file(self, file_path: str) -> str:
         """Handles loading for FASTA files, including decompression if needed."""
         if file_path.endswith(".gz"):
             with gzip.open(file_path, "rt", encoding="utf-8") as file:
@@ -58,18 +64,14 @@ class FASTAFile(DataFile):
             with open(file_path, "r", encoding="utf-8") as file:
                 return file.read()
 
-    def load(self, file_path):
-        """Loads a FASTA file and parses it."""
-        self.parse_file(file_path)
-
 
 class FASTAQFile(DataFile):
     EXTENSIONS = {".fq", ".fq.gz"}
 
-    def get_container_type(self):
+    def get_container_type(self) -> FASTAQRecordContainer:
         return FASTAQRecordContainer()
 
-    def load_file(self, file_path):
+    def load_file(self, file_path: str) -> str:
         """Handles loading for FASTQ files, including decompression if needed."""
         if file_path.endswith(".gz"):
             with gzip.open(file_path, "rt", encoding="utf-8") as file:
@@ -77,7 +79,3 @@ class FASTAQFile(DataFile):
         else:
             with open(file_path, "r", encoding="utf-8") as file:
                 return file.read()
-
-    def load(self, file_path):
-        """Loads a FASTQ file and parses it."""
-        self.parse_file(file_path)
