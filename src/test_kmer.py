@@ -1,8 +1,17 @@
 import pytest
 import random
-from collections import namedtuple
+import pickle
+import gzip
 from records import FASTARecordContainer, FASTAQRecordContainer
-from k_mer import Read, ReadMappingType, KmerReference, extract_k_mers_from_genome
+from kmer import (
+    Read,
+    ReadMappingType,
+    KmerReference,
+    extract_kmers_from_genome,
+    ReadMapping,
+    AddingExistingRead,
+    PseudoAlignment
+)
 
 
 @pytest.fixture
@@ -42,7 +51,7 @@ def sample_fasta_container():
     return container
 
 
-def test_extract_k_mers_from_genome():
+def test_extract_kmers_from_genome():
     genome = "AGCTAGCTAGCT"
     k = 3
     expected_kmers = [
@@ -57,19 +66,19 @@ def test_extract_k_mers_from_genome():
         (8, "AGC"),
         (9, "GCT"),
     ]
-    assert list(extract_k_mers_from_genome(k, genome)) == expected_kmers
+    assert list(extract_kmers_from_genome(k, genome)) == expected_kmers
 
 
 def test_kmer_reference_building(kmer_reference):
-    assert kmer_reference.get_k_mer_references("AGC")
-    assert kmer_reference.get_k_mer_references("TGC")
-    assert not kmer_reference.get_k_mer_references(
+    assert kmer_reference.get_kmer_references("AGC")
+    assert kmer_reference.get_kmer_references("TGC")
+    assert not kmer_reference.get_kmer_references(
         "GGG"
     )  # k-mer not present in reference genomes
-    assert kmer_reference.get_k_mer_references(
+    assert kmer_reference.get_kmer_references(
         "GCT"
     )  # k-mer appearing in multiple genomes
-    assert kmer_reference.get_k_mer_references("CCG")  # k-mer exclusive to Genome4
+    assert kmer_reference.get_kmer_references("CCG")  # k-mer exclusive to Genome4
 
 
 # Case 1: Unmapped Read
@@ -163,6 +172,7 @@ def test_ambiguously_mapped_read(kmer_reference_ambiguous, read_ambiguous):
     result = read_ambiguous.pseudo_align(kmer_reference_ambiguous)
     print("Ambiguous Read Alignment Result:", result)
     assert result == ReadMappingType.AMBIGUOUSLY_MAPPED
+    assert len(read_ambiguous.mapping.genomes_mapped_to) == 4
 
 
 # Case 4: Initially Unique but Changed to Ambiguous
@@ -220,22 +230,24 @@ def big_read():
 @pytest.fixture
 def synthetic_kmer_reference(big_read):
     k = 31
-    extracted_kmers = list(extract_k_mers_from_genome(k, big_read._Read__raw_read))
-    
+    extracted_kmers = list(extract_kmers_from_genome(k, big_read._Read__raw_read))
+
     # Randomly distribute k-mers across genomes, allowing duplicates
     num_genomes = 4
     genomes = {f">Genome{i+1}": [] for i in range(num_genomes)}
-    
-    for _, k_mer in extracted_kmers:
-        selected_genomes = random.sample(list(genomes.keys()), k=random.randint(1, num_genomes))
+
+    for _, kmer in extracted_kmers:
+        selected_genomes = random.sample(
+            list(genomes.keys()), k=random.randint(1, num_genomes)
+        )
         for genome in selected_genomes:
-            genomes[genome].append(k_mer)
-    
+            genomes[genome].append(kmer)
+
     fasta_data = "".join(f"{name}\n{"NN".join(seq)}\n" for name, seq in genomes.items())
-    
+
     for name, sequence in genomes.items():
         print(f"{name}: {sequence}")
-    
+
     container = FASTARecordContainer()
     container.parse_records(fasta_data)
     return KmerReference(k, container)
@@ -245,7 +257,7 @@ def test_kmer_reference_counts(synthetic_kmer_reference):
     kmer_counts = {}
     unspecific_count = 0
 
-    for kmer in synthetic_kmer_reference.k_mers.values():
+    for kmer in synthetic_kmer_reference.kmers.values():
         for genome, positions in kmer.items():
             kmer_counts[genome] = kmer_counts.get(genome, 0) + len(positions)
 
@@ -254,8 +266,11 @@ def test_kmer_reference_counts(synthetic_kmer_reference):
 
     assert sum(kmer_counts.values()) > 0  # Ensure k-mers are assigned
 
-@pytest.mark.parametrize('execution_number', range(10))
-def test_pseudo_align_random_big_kmers(capsys, big_read, synthetic_kmer_reference, execution_number):
+
+@pytest.mark.parametrize("execution_number", range(10))
+def test_pseudo_align_random_big_kmers(
+    capsys, big_read, synthetic_kmer_reference, execution_number
+):
     """
     This is meant to almost implement the algorithm a second time to verify the main implementation.
     In addition, because the spererator for the k-mers is 'NN', then this tests that as well :)
@@ -265,10 +280,10 @@ def test_pseudo_align_random_big_kmers(capsys, big_read, synthetic_kmer_referenc
     specific_counts = {}
     total_counts = {}
 
-    for k in synthetic_kmer_reference.k_mers.keys():
-        print (k)
+    for k in synthetic_kmer_reference.kmers.keys():
+        print(k)
     # Notice all k-mers are in the Read since the genomes are generated from k-mers in the read
-    for kmer, genome_map in synthetic_kmer_reference.k_mers.items():
+    for kmer, genome_map in synthetic_kmer_reference.kmers.items():
         mapped_genomes = list(genome_map.keys())
         if len(mapped_genomes) == 1:
             specific_counts[mapped_genomes[0]] = specific_counts.get(
@@ -313,3 +328,118 @@ def test_pseudo_align_random_big_kmers(capsys, big_read, synthetic_kmer_referenc
         assert alignment_result == ReadMappingType.AMBIGUOUSLY_MAPPED
     else:
         assert alignment_result == ReadMappingType.AMBIGUOUSLY_MAPPED
+
+
+# Testing PseudoAlignment
+
+import pytest
+import gzip
+import pickle
+from records import FASTAQRecordContainer, FASTARecordContainer, Record
+
+
+# Mock KmerReference to avoid unnecessary dependencies
+class MockKmerReference:
+    def get_kmer_references(self, kmer):
+        return {}
+
+
+@pytest.fixture
+def mock_kmer_reference():
+    return MockKmerReference()
+
+
+@pytest.fixture
+def pseudo_alignment(mock_kmer_reference):
+    return PseudoAlignment(mock_kmer_reference)
+
+
+@pytest.fixture
+def create_read():
+    """Creates a Read object from FASTAQRecordContainer"""
+    def _create_read(identifier, sequence, quality, genomes_mapped_to=None, mapping_type="UNMAPPED"):
+        fastaq_data = f"@{identifier}\n{sequence}\n+\n{quality}\n"
+        container = FASTAQRecordContainer()
+        container.parse_records(fastaq_data)
+        read = Read(list(container)[0])
+
+        if genomes_mapped_to or genomes_mapped_to == []:
+            read.mapping = ReadMapping(ReadMappingType[mapping_type], genomes_mapped_to)
+
+        return read
+
+    return _create_read
+
+
+@pytest.fixture
+def create_record():
+    """Creates a Record object using FASTARecordContainer"""
+    def _create_record(genome_id, genome_sequence="AGCTAGCTAG"):
+        fasta_data = f">{genome_id}\n{genome_sequence}\n"
+        container = FASTARecordContainer()
+        container.parse_records(fasta_data)
+        return list(container)[0]  # Return the first (and only) record
+
+    return _create_record
+
+
+def test_add_read_for_pseudo_alignment(pseudo_alignment, create_read, create_record):
+    genome1 = create_record("Genome1")
+    read1 = create_read("read1", "AGCTAGCT", "IIIIIIII", [genome1], "UNIQUELY_MAPPED")
+
+    pseudo_alignment.add_read(read1)
+
+    assert "read1" in pseudo_alignment.reads
+    assert pseudo_alignment.reads["read1"]["mapping_type"] == ReadMappingType.UNIQUELY_MAPPED
+    assert pseudo_alignment.reads["read1"]["genomes_mapped_to"] == [genome1.identifier]
+
+
+def test_add_duplicate_read_raises_exception_for_pseudo_alignment(pseudo_alignment, create_read, create_record):
+    genome1 = create_record("Genome1")
+    read1 = create_read("read1", "AGCTAGCT", "IIIIIIII", [genome1], "UNIQUELY_MAPPED")
+
+    pseudo_alignment.add_read(read1)
+
+    with pytest.raises(AddingExistingRead):
+        pseudo_alignment.add_read(read1)
+
+
+def test_get_summary_for_pseudo_alignment(pseudo_alignment, create_read, create_record):
+    genome1 = create_record("Genome1")
+    genome2 = create_record("Genome2")
+
+    read1 = create_read("read1", "AGCTAGCT", "IIIIIIII", [genome1], "UNIQUELY_MAPPED")
+    read2 = create_read("read2", "TGCATGCA", "IIIIIIII", [genome1, genome2], "AMBIGUOUSLY_MAPPED")
+    read3 = create_read("read3", "GGGGGGGG", "IIIIIIII", [], "UNMAPPED")
+
+    pseudo_alignment.add_read(read1)
+    pseudo_alignment.add_read(read2)
+    pseudo_alignment.add_read(read3)
+
+    summary = pseudo_alignment.get_summary()
+
+    assert summary["Statistics"]["unique_mapped_reads"] == 1
+    assert summary["Statistics"]["ambiguous_mapped_reads"] == 1
+    assert summary["Statistics"]["unmapped_reads"] == 1
+
+    assert summary["Summary"]["Genome1"]["unique_reads"] == 1
+    assert summary["Summary"]["Genome1"]["ambiguous_reads"] == 1
+    assert summary["Summary"]["Genome2"]["unique_reads"] == 0
+    assert summary["Summary"]["Genome2"]["ambiguous_reads"] == 1
+
+
+def test_save_and_load_for_pseudo_alignment(pseudo_alignment, create_read, create_record, tmp_path):
+    genome1 = create_record("Genome1")
+    read1 = create_read("read1", "AGCTAGCT", "IIIIIIII", [genome1], "UNIQUELY_MAPPED")
+
+    pseudo_alignment.add_read(read1)
+
+    align_file = tmp_path / "test.aln"
+    pseudo_alignment.save(str(align_file))
+
+    with gzip.open(str(align_file), "rb") as f:
+        loaded_alignment = pickle.load(f)
+
+    assert "read1" in loaded_alignment.reads
+    assert loaded_alignment.reads["read1"]["mapping_type"] == ReadMappingType.UNIQUELY_MAPPED
+    assert loaded_alignment.reads["read1"]["genomes_mapped_to"] == [genome1.identifier]

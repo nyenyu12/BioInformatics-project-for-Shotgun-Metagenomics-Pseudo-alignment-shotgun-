@@ -1,6 +1,5 @@
 from records import *
 import pytest
-from collections import namedtuple
 
 # Assuming the classes Section, SectionSpecification, Record, RecordContainer are already defined
 
