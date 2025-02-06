@@ -72,7 +72,7 @@ def parse_arguments(args: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument("-a", "--alignfile", help="aln file. Can be either input or name for output file")
     parser.add_argument("--reads", help="FASTQ reads file")
     parser.add_argument("-m", "--unique-threshold", help="unique k-mer threshold", type=int)
-    parser.add_argument("-p", "--ambiguous-threshold", help="ambiguous k-mer threshold", type=int)
+    parser.add_argument("-p", "--ambiguous-threhold", help="ambiguous k-mer threshold", type=int)
     parser.add_argument("--reverse-complement", action="store_true")
     parser.add_argument("--min-read-quality", type=int, default=None)
     parser.add_argument("--min-kmer-quality", type=int, default=None)
@@ -281,6 +281,7 @@ def dump_alignment_from_reference(reference_file: str, reads_file: str,
         kmer_reference = KmerReference.load(reference_file)
     except gzip.BadGzipFile:
         sys.exit("Error: Incorrect format of input file.")
+    #print (list(kmer_reference.kmers))
     pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, p, m,
                                                        min_read_quality, min_kmer_quality, max_genomes)
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
@@ -319,10 +320,10 @@ def main() -> None:
 
     # Validate flag combinations based on the task.
     if args.task == "reference":
-        if args.reads or args.alignfile or args.unique_threshold or args.ambiguous_threshold or args.min_read_quality or args.min_kmer_quality or args.max_genomes:
+        if args.reads or args.alignfile or args.unique_threshold or args.ambiguous_threhold or args.min_read_quality or args.min_kmer_quality or args.max_genomes:
             sys.exit("Error: For task 'reference', only -g, -k, -r, --filter-similar, and --similarity-threshold are allowed.")
     elif args.task == "dumpref":
-        if args.reads or args.alignfile or args.unique_threshold or args.ambiguous_threshold or args.min_read_quality or args.min_kmer_quality or args.max_genomes:
+        if args.reads or args.alignfile or args.unique_threshold or args.ambiguous_threhold or args.min_read_quality or args.min_kmer_quality or args.max_genomes:
             sys.exit("Error: For task 'dumpref', only -r or (-g and -k) with --filter-similar and --similarity-threshold are allowed.")
     elif args.task == "align":
         if not ((args.referencefile and args.reads and args.alignfile) or (args.genomefile and args.kmer_size and args.reads and args.alignfile)):
@@ -334,9 +335,12 @@ def main() -> None:
         sys.exit("Error: Unsupported task.")
 
     # Default values for flags that are not None set here for the previous section to work properly
-    args.unique_threshold = DEFAULT_UNIQUE_THRESHOLD
-    args.ambiguous_threshold = DEFAULT_AMBIGUOUS_THRESHOLD
-    args.similarity_threshold =  DEFAULT_SIMILARITY_THRESHOLD
+    if not args.unique_threshold:
+        args.unique_threshold = DEFAULT_UNIQUE_THRESHOLD
+    if not args.ambiguous_threhold:
+        args.ambiguous_threhold = DEFAULT_AMBIGUOUS_THRESHOLD
+    if not args.similarity_threshold:
+        args.similarity_threshold =  DEFAULT_SIMILARITY_THRESHOLD
     try:
         if args.task == "reference":
             validate_file_readable(args.genomefile, "Genome FASTA")
@@ -357,7 +361,7 @@ def main() -> None:
             if args.referencefile and args.reads and args.alignfile:
                 validate_file_readable(args.referencefile, "Reference database")
                 create_alignment_from_reference_file(args.referencefile, args.reads, args.alignfile,
-                                                       args.unique_threshold, args.ambiguous_threshold,
+                                                       args.unique_threshold, args.ambiguous_threhold,
                                                        args.min_read_quality, args.min_kmer_quality,
                                                        args.max_genomes)
             elif args.genomefile and args.kmer_size and args.reads and args.alignfile:
@@ -368,26 +372,26 @@ def main() -> None:
                                             args.filter_similar, args.similarity_threshold)
                 kmer_ref.save(args.referencefile)  # Save the reference using its method.
                 create_alignment_from_reference_file(args.referencefile, args.reads, args.alignfile,
-                                                       args.unique_threshold, args.ambiguous_threshold,
+                                                       args.unique_threshold, args.ambiguous_threhold,
                                                        args.min_read_quality, args.min_kmer_quality,
                                                        args.max_genomes)
         elif args.task == "dumpalign":
             if args.referencefile and args.reads:
                 validate_file_readable(args.reads, "FASTQ reads")
                 dump_alignment_from_reference(args.referencefile, args.reads,
-                                              args.unique_threshold, args.ambiguous_threshold,
+                                              args.unique_threshold, args.ambiguous_threhold,
                                               args.min_read_quality, args.min_kmer_quality,
                                               args.max_genomes)
             elif args.genomefile and args.kmer_size and args.reads:
                 validate_file_readable(args.reads, "FASTQ reads")
                 validate_file_readable(args.genomefile, "Genome FASTA")
                 build_reference_align_and_dump(args.genomefile, args.kmer_size, args.reads,
-                                               args.unique_threshold, args.ambiguous_threshold,
+                                               args.unique_threshold, args.ambiguous_threhold,
                                                args.min_read_quality, args.min_kmer_quality,
                                                args.max_genomes, args.filter_similar,
                                                args.similarity_threshold)
             elif args.alignfile:
-                validate_file_writable(args.alignfile, "Alignment output")
+                validate_file_readable(args.alignfile, "Alignment output")
                 dump_alignment_file(args.alignfile)
             else:
                 sys.exit("Error: Provide either -g and -k with --reads, or -r with --reads, or -a.")

@@ -1,12 +1,97 @@
-# 0:30
-# Show usage instructions
-python3 main.py --help
+# date and ls -la for reference
+date
+ls -lath
 
-# 1:20
-# Convert a sudoku puzzle to our format and solve it
-python3 main.py --convert --input puzzle1.txt --output puzzle1.json
-python3 main.py --solve --input puzzle1.json
+# 
+# 1. Create a reference with k=31 using the mid‑sized simulated reference file.
+echo "Creating reference (k=31)..."
+python3 ../main.py -t reference \
+    -g ../example_simulated_data/example_ref_mid_clean.fa \
+    -k 31 \
+    -r REFERENCEFILE.kdb
+ls -lath REFERENCEFILE.kdb
 
-# 2:00
-# Extension explaining solution
-python3 main.py --solve --explain --input puzzle1.json
+#
+# 2. Dump the summary of the just‐created reference.
+# lookup: \d+\n\d+, Summary
+echo "Dumping reference summary for REFERENCEFILE.kdb..."
+python3 ../main.py -t dumpref \
+    -r REFERENCEFILE.kdb > dump_ref_31
+ls -lath REFERENCEFILE.kdb
+
+#
+# 3. Create a reference with k=75 (using a different genome file) to show variation.
+echo "Creating reference (k=75)..."
+python3 ../main.py -t reference \
+    -g ../example_simulated_data/example_ref_mid_clean.fa \
+    -k 75 \
+    -r mid_REFERENCEFILE75.kdb
+ls -lath mid_REFERENCEFILE75.kdb
+
+
+#
+# 4. Create a reference with k=75 for small to continue example.
+echo "Creating reference (k=75)..."
+python3 ../main.py -t reference \
+    -g ../example_simulated_data/example_ref_small_clean.fa \
+    -k 75 \
+    -r REFERENCEFILE75.kdb
+ls -lath REFERENCEFILE75.kdb
+
+#
+# 5. Create an alignment using the k=75 reference file and a small FASTQ file.
+echo "Aligning reads using REFERENCEFILE75.kdb..."
+python3 ../main.py -t align \
+    -r REFERENCEFILE75.kdb \
+    -a ALIGNFILE_small_k75.aln \
+    --reads ../example_simulated_data/small_example_se_k75_n1000.fq \
+    -m 1 -p 1
+ls -lath ALIGNFILE_small_k75.aln
+
+#
+# 6. Dump the alignment summary from the alignment file.
+echo "Dumping alignment summary from ALIGNFILE_small_k75.aln..."
+python3 ../main.py -t dumpalign \
+    -a  ALIGNFILE_small_k75.aln
+
+#
+# 7. Dump the alignment summary straight from reference.
+echo "Dumping alignment summary from ALIGNFILE_small_k75.aln..."
+python3 ../main.py -t dumpalign \
+    -r ./REFERENCEFILE75.kdb \
+    --reads ../example_simulated_data/small_example_se_k75_n1000.fq
+
+#
+# 8. Run alignment with quality filtering flags (min-read-quality, min-kmer-quality, max-genomes).
+echo "Aligning with quality filters (min-read-quality=50, min-kmer-quality=60, max-genomes=2)..."
+python3 ../main.py -t dumpalign \
+    -g ../example_simulated_data/example_ref_mid_clean.fa \
+    -k 150 \
+    --reads ../example_simulated_data/mid_example_se_k150_n10k.fq \
+    --min-read-quality 59 \
+    --min-kmer-quality 60 \
+    --max-genomes 2 > align_mid_150_flags
+ls -lath align_mid_150_flags
+
+#
+# 9. Run alignment with quality filtering flags (min-read-quality, min-kmer-quality, max-genomes), show that max genomes impacts.
+echo "Aligning with quality filters (min-read-quality=50, min-kmer-quality=60, max-genomes=2)..."
+python3 ../main.py -t dumpalign \
+    -g ../example_simulated_data/example_ref_mid_clean.fa \
+    -k 150 \
+    --reads ../example_simulated_data/mid_example_se_k150_n10k.fq \
+    --min-read-quality 59 \
+    --min-kmer-quality 60 \
+    --max-genomes 0 > align_mid_150_flags_nop
+ls -lath align_mid_150_flags_nop
+
+#
+# 10. Create a reference with filtering enabled (EXTSIM) using a small clean reference.
+# notice substring of kmer CAGCTTCAG
+echo "Creating filtered reference (filter-similar with similarity-threshold=0.5)..."
+python3 ../main.py -t dumpref \
+         -g ./smpref_T4_7uniq_3ambig_genome.fa \
+         -k 31 \
+         --filter-similar \
+        --similarity-threshold 0.75 > align_2_with_similiarity_filters
+ls -lath align_2_with_similiarity_filters

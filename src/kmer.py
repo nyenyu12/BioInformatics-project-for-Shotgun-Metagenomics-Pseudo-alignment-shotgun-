@@ -10,7 +10,7 @@ import pickle
 from collections import namedtuple, defaultdict
 from enum import Enum
 from records import FASTAQRecordContainer, FASTARecordContainer, Record
-from typing import List, Dict, Iterator, Set, Tuple, Union, Optional
+from typing import List, Dict, Iterator, Set, Tuple, Union, Optional, Any
 
 """Global thresholds"""
 IGNORE_AMBIGUOUS_THRESHOLD = 0
@@ -78,7 +78,7 @@ def extract_k_max_value_keys_from_dict(d: Dict[str, int], k: int) -> List[str]:
         raise ValueError("Input must be a dictionary.")
     if len(d) == 0:
         return []
-    sorted_keys = sorted(d, key=d.get, reverse=True)
+    sorted_keys = sorted(d, key=lambda x: d[x], reverse=True)
     return sorted_keys[:k]
 
 def extract_kmers_from_genome(k: int, genome: str) -> Iterator[Tuple[int, str]]:
@@ -91,7 +91,7 @@ def extract_kmers_from_genome(k: int, genome: str) -> Iterator[Tuple[int, str]]:
     if k > len(genome) or k <= 0:
         return iter([])
     for i in range(len(genome) - k + 1):
-        yield (i, genome[i: i + k])
+        yield (i, genome[i : i + k])
 
 def reverse_complement(seq: str) -> str:
     """
@@ -140,15 +140,14 @@ class KmerReference(object):
         """
         for fasta_record in fasta_records:
             genome_sequence = fasta_record["genome"]
-            # Using the record itself as a unique key.
-            genome_record = fasta_record
+            # Use the fasta_record itself as the key (assumed hashable)
             for kmer_pos, kmer in extract_kmers_from_genome(k, genome_sequence):
                 if constants.NULL_NUCLEOTIDES_CHAR not in kmer:
                     if kmer not in self.kmers:
                         self.kmers[kmer] = {}
-                    if genome_record not in self.kmers[kmer]:
-                        self.kmers[kmer][genome_record] = set()
-                    self.kmers[kmer][genome_record].add(kmer_pos)
+                    if fasta_record not in self.kmers[kmer]:
+                        self.kmers[kmer][fasta_record] = set()
+                    self.kmers[kmer][fasta_record].add(kmer_pos)
 
     def _compute_genome_stats(self) -> Tuple[Dict[str, Dict[str, Union[int, float]]], Dict[str, Set[str]]]:
         """
@@ -199,12 +198,14 @@ class KmerReference(object):
         """
         kept: List[Tuple[str, Set[str]]] = []
         similarity_info: Dict[str, Dict[str, Union[str, int, float]]] = {}
+        
         for genome_id, stats in sorted_genomes:
             current_kmers = genome_to_kmers.get(genome_id, set())
             filtered_flag = False
             for kept_genome_id, kept_kmers in kept:
                 min_count = min(len(current_kmers), len(kept_kmers))
                 sim_score = (len(current_kmers.intersection(kept_kmers)) / min_count) if min_count > 0 else 0
+                print (sim_score, genome_id, kept_genome_id, similarity_threshold)
                 if sim_score > similarity_threshold:
                     similarity_info[genome_id] = {
                         "kept": "no",
@@ -212,7 +213,7 @@ class KmerReference(object):
                         "total_kmers": stats["total_kmers"],
                         "genome_length": stats["genome_length"],
                         "similar_to": kept_genome_id,
-                        "similarity_score": round(sim_score, 2),
+                        "similarity_score": sim_score,
                     }
                     filtered_flag = True
                     break
@@ -297,14 +298,14 @@ class KmerReference(object):
         """
         return self.kmers.get(kmer, {})
 
-    def get_summary(self) -> Dict[str, Dict[str, Union[Dict[str, List[int]], Dict[str, int], Dict[str, Dict]]]]:
+    def get_summary(self) -> Dict[str, Any]:
         """
         @brief Returns a summary of the k-mer reference database.
         @return A dictionary containing k-mer details, genome summary, and filtering similarity info if available.
         """
         kmer_details = {
             kmer: {
-                genome["description"]: sorted(positions)
+                genome["description"]: sorted(list(positions))
                 for genome, positions in genomes.items()
             }
             for kmer, genomes in self.kmers.items()
@@ -381,8 +382,8 @@ class Read:
             rows.append(f"k-mer: {kmer}")
             rows.append(f"specifity: {self.kmers[kmer].specifity}")
             rows.append("Genome References:")
-            for references in self.kmers[kmer]:
-                rows.append(f"\t{references}")
+            for reference in self.kmers[kmer]:
+                rows.append(f"\t{reference}")
         return "\n".join(rows)
 
     def __repr__(self) -> str:
@@ -425,8 +426,7 @@ class Read:
                 if max_genomes is not None and len(single_kmer_reference) > max_genomes:
                     self.num_redundant_kmers += 1
                     continue
-                kmer_specifity = (KmerSpecifity.SPECIFIC if len(single_kmer_reference) == 1
-                                  else KmerSpecifity.UNSPECIFIC)
+                kmer_specifity = (KmerSpecifity.SPECIFIC if len(single_kmer_reference) == 1 else KmerSpecifity.UNSPECIFIC)
                 self.kmers[kmer] = ReadKmer(specifity=kmer_specifity, references=single_kmer_reference)
 
     def generate_genome_counts(self, map_count: bool = False) -> Dict[Record, int]:
@@ -455,7 +455,7 @@ class Read:
             self.mapping = ReadMapping(ReadMappingType.UNIQUELY_MAPPED, [list(self.__genomes_map_count.keys())[0]])
             return True
         if len(self.__genomes_map_count) > 1:
-            sorted_genomes = sorted(self.__genomes_map_count, key=self.__genomes_map_count.get, reverse=True)
+            sorted_genomes = sorted(self.__genomes_map_count, key=lambda r: self.__genomes_map_count[r], reverse=True)
             if self.__genomes_map_count[sorted_genomes[0]] >= self.__genomes_map_count[sorted_genomes[1]] + m:
                 self.mapping = ReadMapping(ReadMappingType.UNIQUELY_MAPPED, [sorted_genomes[0]])
                 return True
@@ -649,9 +649,10 @@ class PseudoAlignment:
                 elif mapping_type == ReadMappingType.AMBIGUOUSLY_MAPPED:
                     summary["ambiguous_mapped_reads"] += 1
                     read_type_string = "ambiguous_reads"
-                for genome in genomes_mapped_to:
-                    genome_mapping.setdefault(genome, {"unique_reads": 0, "ambiguous_reads": 0})
-                    genome_mapping[genome][read_type_string] += 1
+                if read_type_string is not None:
+                    for genome in genomes_mapped_to:
+                        genome_mapping.setdefault(genome, {"unique_reads": 0, "ambiguous_reads": 0})
+                        genome_mapping[genome][read_type_string] += 1
             else:
                 summary["unmapped_reads"] += 1
         return {"Statistics": summary, "Summary": genome_mapping}
