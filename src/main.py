@@ -323,7 +323,6 @@ def main() -> None:
             sys.exit("Error: For task 'reference', only -g, -k, -r, --filter-similar, and --similarity-threshold are allowed.")
     elif args.task == "dumpref":
         if args.reads or args.alignfile or args.unique_threshold or args.ambiguous_threshold or args.min_read_quality or args.min_kmer_quality or args.max_genomes:
-            sys.exit ((args.reads, args.alignfile, args.unique_threshold, args.ambiguous_threshold, args.min_read_quality, args.min_kmer_quality, args.max_genomes))
             sys.exit("Error: For task 'dumpref', only -r or (-g and -k) with --filter-similar and --similarity-threshold are allowed.")
     elif args.task == "align":
         if not ((args.referencefile and args.reads and args.alignfile) or (args.genomefile and args.kmer_size and args.reads and args.alignfile)):

@@ -8,7 +8,7 @@
 import re
 import constants
 from collections import namedtuple
-from typing import Iterator, List, Tuple, Union, Dict, Set, Any, Optional
+from typing import Iterator, List, Tuple, Union, Dict, Set, Any, cast
 
 """Regular expression snippet used to delimit sections until the next header or EOF."""
 UNTIL_NEXT_HEADER_OR_EOF: str = r"(?=(?=\r?\n{section_header})|(?=(?:\r?\n)?\Z))"
@@ -17,7 +17,7 @@ UNPARSED_SNIPPET_LEN: int = 20
 
 ##===========================================================
 ## Custom Exceptions
-##============================================================
+##===========================================================
 
 class NoRecordsInData(Exception):
     """
@@ -49,7 +49,7 @@ class UnparsedDataError(Exception):
 
 ##===========================================================
 ## Named Tuples for Record Structure
-##============================================================
+##===========================================================
 
 Section = namedtuple("Section", ["name", "data"])
 """@brief A section of a record."""
@@ -69,7 +69,7 @@ SectionSpecification = namedtuple(
 
 ##===========================================================
 ## Class: Record
-##============================================================
+##===========================================================
 
 class Record(object):
     """
@@ -114,24 +114,26 @@ class Record(object):
         @return String representation of the record.
         """
         return self.__str__()
+
 ##===========================================================
 ## Class: RecordContainer
-##============================================================
+##===========================================================
 
 class RecordContainer(object):
     """
     @brief Abstract base class for record containers.
     """
-    SECTION_SPECIFICATIONS: Optional[Tuple[SectionSpecification, ...]] = None
+    # Every subclass must define SECTION_SPECIFICATIONS as a tuple of SectionSpecification.
+    SECTION_SPECIFICATIONS: Tuple[SectionSpecification, ...]  # no default
 
     def __init__(self) -> None:
         """
         @brief Initializes the RecordContainer.
         @exception NotImplementedError if SECTION_SPECIFICATIONS is not defined.
         """
-        if self.__class__.SECTION_SPECIFICATIONS is None:
+        if not hasattr(self.__class__, "SECTION_SPECIFICATIONS") or self.__class__.SECTION_SPECIFICATIONS is None:
             raise NotImplementedError("SECTION_SPECIFICATIONS must be defined.")
-        self.__re_pattern: Optional[str] = None
+        self.__re_pattern: str = ""
         self.create_record_re_string()
         self._unique_index_values: Set[str] = set()
         self._records: List[Record] = []
@@ -142,6 +144,7 @@ class RecordContainer(object):
         """
         re_parts: List[str] = []
         is_first_header: bool = True
+        # Since SECTION_SPECIFICATIONS is guaranteed to be defined, we can iterate over it.
         for (_, section_header, must_have_data, section_legal_chars, chars_to_remove, _) in self.__class__.SECTION_SPECIFICATIONS:
             if is_first_header:
                 re_parts.append(f"^{re.escape(section_header)}")
@@ -163,13 +166,15 @@ class RecordContainer(object):
         @exception NoRecordsInData if no valid records are found.
         @exception UnparsedDataError if any unparsed data remains.
         """
+        assert self.__re_pattern is not None, "Regular expression pattern is not set."
         parsed_indices: Set[int] = set()
         match_spans: List[Tuple[int, int]] = []
         for match in re.finditer(self.__re_pattern, data, flags=re.MULTILINE):
             if any(match.groups()):
                 parsed_indices.update(range(match.start(), match.end()))
                 match_spans.append((match.start(), match.end()))
-                self.create_record(match.groups())
+                # Cast match.groups() to the expected type.
+                self.create_record(cast(Tuple[str, Any], match.groups()))
         if len(self._records) == 0:
             raise NoRecordsInData
         unparsed_data = [i for i in range(len(data)) if i not in parsed_indices and data[i].strip()]
@@ -202,7 +207,7 @@ class RecordContainer(object):
 
 ##===========================================================
 ## Class: FASTARecordContainer
-##============================================================
+##===========================================================
 
 class FASTARecordContainer(RecordContainer):
     """
@@ -235,7 +240,7 @@ class FASTARecordContainer(RecordContainer):
 
 ##===========================================================
 ## Class: FASTAQRecordContainer
-##============================================================
+##===========================================================
 
 class FASTAQRecordContainer(RecordContainer):
     """
