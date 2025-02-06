@@ -331,13 +331,6 @@ def test_pseudo_align_random_big_kmers(
 
 
 # Testing PseudoAlignment
-
-import pytest
-import gzip
-import pickle
-from records import FASTAQRecordContainer, FASTARecordContainer, Record
-
-
 # Mock KmerReference to avoid unnecessary dependencies
 class MockKmerReference:
     def get_kmer_references(self, kmer):
@@ -443,3 +436,100 @@ def test_save_and_load_for_pseudo_alignment(pseudo_alignment, create_read, creat
     assert "read1" in loaded_alignment.reads
     assert loaded_alignment.reads["read1"]["mapping_type"] == ReadMappingType.UNIQUELY_MAPPED
     assert loaded_alignment.reads["read1"]["genomes_mapped_to"] == [genome1.identifier]
+
+
+@pytest.fixture
+def sample_fasta_container():
+    """Create a mock FASTA file with multiple genomes for testing."""
+    data = (
+        ">Genome1\nAGCTAGCTAGCTAGCTAGCT\n"
+        ">Genome2\nTGCATGCATGCATGCATGCA\n"
+        ">Genome3\nAGCTTGCATGCAGCTAGCTA\n"
+        ">Genome4\nCCGGAAGCTTGCATGCAGCTA\n"
+    )
+    container = FASTARecordContainer()
+    container.parse_records(data)
+    return container
+
+@pytest.fixture
+def kmer_reference(sample_fasta_container):
+    return KmerReference(3, sample_fasta_container)
+
+@pytest.fixture
+def sample_fastq_container():
+    """Create a mock FASTQ file with quality scores."""
+    data = (
+        "@Read1\nAGCTAGCT\n+\nIIIIIIII\n"  # High-quality read (ASCII 'I' -> high score)
+        "@Read2\nTGCATGCA\n+\n!!!!!!!!\n"  # Low-quality read (ASCII '!' -> very low)
+        "@Read3\nGGGGGGGG\n+\n!!IIIIII\n"  # Another high-quality read
+    )
+    container = FASTAQRecordContainer()
+    container.parse_records(data)
+    return container
+
+@pytest.fixture
+def sample_reads(sample_fastq_container):
+    return [Read(record) for record in sample_fastq_container]
+
+@pytest.fixture
+def pseudo_alignment(kmer_reference):
+    return PseudoAlignment(kmer_reference)
+
+
+### **Test Read-Level Quality Filtering**
+def test_min_read_quality_filter(pseudo_alignment, sample_fastq_container):
+    """Ensure that reads below `min_read_quality` are ignored."""
+    pseudo_alignment.align_reads_from_container(sample_fastq_container, min_read_quality=40)
+    
+    summary = pseudo_alignment.get_summary()
+    print (summary)
+    assert summary["Statistics"]["filtered_quality_reads"] == 1  # One read is filtered
+    assert summary["Statistics"]["unmapped_reads"] >= 1  # At least one unmapped read
+
+
+### **Test K-mer-Level Quality Filtering**
+def test_min_kmer_quality_filter(pseudo_alignment, sample_fastq_container):
+    """Ensure that k-mers below `min_kmer_quality` are ignored."""
+    pseudo_alignment.align_reads_from_container(sample_fastq_container, min_kmer_quality=60)
+    
+    summary = pseudo_alignment.get_summary()
+    print (summary)
+    assert summary["Statistics"]["filtered_quality_kmers"] > 0  # Some k-mers should be filtered
+
+
+### **Test Highly Redundant K-mer Filtering**
+def test_max_genomes_filter(pseudo_alignment, sample_fastq_container):
+    """Ensure that k-mers appearing in too many genomes are ignored."""
+    pseudo_alignment.align_reads_from_container(sample_fastq_container, max_genomes=2)
+    
+    summary = pseudo_alignment.get_summary()
+    assert summary["Statistics"]["filtered_hr_kmers"] > 0  # Some k-mers should be removed
+
+
+### **Test Combined Filtering (Read + K-mer + Max Genomes)**
+def test_combined_filters(pseudo_alignment, sample_fastq_container):
+    """Ensure the system correctly applies all three filters together."""
+    pseudo_alignment.align_reads_from_container(
+        sample_fastq_container, min_read_quality=40, min_kmer_quality=50, max_genomes=2
+    )
+    
+    summary = pseudo_alignment.get_summary()
+    assert summary["Statistics"]["filtered_quality_reads"] == 1  # Read2 should be filtered
+    assert summary["Statistics"]["filtered_quality_kmers"] == 1  # Some k-mers should be removed
+    assert summary["Statistics"]["filtered_hr_kmers"] == 5  # Some k-mers should be removed
+
+
+### **Test Pseudo-Alignment with Filters Applied**
+def test_pseudo_alignment_with_quality_and_max_genomes(pseudo_alignment, sample_fastq_container):
+    """Ensure alignment still works correctly when filtering is applied."""
+    pseudo_alignment.align_reads_from_container(
+        sample_fastq_container, min_read_quality=30, min_kmer_quality=30, max_genomes=3
+    )
+    
+    summary = pseudo_alignment.get_summary()
+    assert summary["Statistics"]["unique_mapped_reads"] == 0 
+    assert summary["Statistics"]["ambiguous_mapped_reads"] == 2 
+    assert summary["Statistics"]["unmapped_reads"] == 1 
+    assert summary["Statistics"]["filtered_quality_reads"] == 0
+    assert summary["Statistics"]["filtered_quality_kmers"] == 0 
+    assert summary["Statistics"]["filtered_hr_kmers"] == 0

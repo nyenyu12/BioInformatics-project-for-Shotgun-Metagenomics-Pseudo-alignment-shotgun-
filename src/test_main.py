@@ -4,8 +4,15 @@ import os
 import json
 import gzip
 import pickle
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 
+from kmer import KmerReference
+from main import (
+    create_alignment_from_reference_file,
+    validate_file_readable,
+    validate_file_writable,
+    parse_arguments,
+)
 
 # Helper functions
 def run_command(command):
@@ -212,3 +219,94 @@ def test_invalid_task():
     assert returncode != 0, "Invalid task should return an error."
     assert "Unsupported task" in stderr, "Error message should mention unsupported task."
 
+
+@pytest.fixture
+def mock_reference_file(tmp_path):
+    """Creates a mock k-mer reference file."""
+    reference_file = tmp_path / "test_reference.kdb.gz"
+    kmer_reference = KmerReference(31, MagicMock())  # Mocking KmerReference
+    with gzip.open(reference_file, "wb") as f:
+        pickle.dump(kmer_reference, f)
+    return str(reference_file)
+
+
+@pytest.fixture
+def mock_reads_file(tmp_path):
+    """Creates a mock FASTAQ reads file."""
+    reads_file = tmp_path / "test_reads.fq"
+    reads_content = "@read1\nAGCTAGCTAGCTAGCTAGCTAGCTAGCTA\n+\nIIIIIIIIIIIIIIIIIIIII!IIIIIII\n"
+    reads_file.write_text(reads_content)
+    return str(reads_file)
+
+
+@pytest.fixture
+def mock_alignment_file(tmp_path):
+    """Creates a mock alignment output file."""
+    return str(tmp_path / "test_alignment.aln.gz")
+
+
+@patch("kmer.PseudoAlignment.align_reads_from_container")
+@patch("data_file.FASTAQFile")
+def test_alignment_with_quality_filters(
+    mock_fastaqfile, mock_align_reads, mock_reference_file, mock_reads_file, mock_alignment_file
+):
+    """
+    Test alignment with min-read-quality (MRQ), min-kmer-quality (MKQ), and max-genomes (MG) filtering.
+    """
+    mock_align_reads.return_value = None  # Mock function to prevent actual execution
+    mock_fastaqfile.return_value.container = MagicMock()
+
+    create_alignment_from_reference_file(
+        mock_reference_file,
+        mock_reads_file,
+        mock_alignment_file,
+        p=1,
+        m=1,
+        min_read_quality=20,  # Testing read-level quality filtering
+        min_kmer_quality=15,  # Testing k-mer-level quality filtering
+        max_genomes=3,  # Testing max-genomes filtering
+    )
+
+    # Ensure the function was called with the expected parameters
+    mock_align_reads.assert_called_once()
+    args, kwargs = mock_align_reads.call_args
+    assert args[1] == 1  # p value
+    assert args[2] == 1  # m value
+    assert args[3] == 20  # MRQ (min read quality)
+    assert args[4] == 15  # MKQ (min kmer quality)
+    assert args[5] == 3  # MG (max genomes)
+
+
+def test_validate_file_readable(tmp_path):
+    """Test that validate_file_readable correctly detects a missing file."""
+    test_file = tmp_path / "missing_file.fq"
+
+    with pytest.raises(SystemExit):
+        validate_file_readable(str(test_file), "FASTQ reads")
+
+
+def test_validate_file_writable(tmp_path):
+    """Test that validate_file_writable correctly detects unwritable locations."""
+    unwritable_dir = tmp_path / "readonly_dir"
+    unwritable_dir.mkdir()
+    os.chmod(unwritable_dir, 0o400)  # Make directory read-only
+
+    unwritable_file = unwritable_dir / "output.aln"
+
+    with pytest.raises(SystemExit):
+        validate_file_writable(str(unwritable_file), "Alignment output")
+
+    os.chmod(unwritable_dir, 0o700)  # Reset permissions
+
+
+@patch("sys.exit")
+def test_parse_arguments_default_values(mock_exit):
+    """Ensure default values are correctly set when arguments are missing."""
+    test_args = ["-t", "align", "--reads", "reads.fq", "-a", "output.aln"]
+
+    with patch("sys.argv", ["main.py"] + test_args):
+        args = parse_arguments()
+
+    assert args.min_read_quality is None
+    assert args.min_kmer_quality is None
+    assert args.max_genomes is None

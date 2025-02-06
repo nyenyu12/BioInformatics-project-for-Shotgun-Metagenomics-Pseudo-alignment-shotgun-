@@ -7,7 +7,12 @@ import sys
 import json
 
 from data_file import FASTAFile, FASTAQFile, InvalidExtensionError, NoRecordsInDataFile
-from kmer import KmerReference, PseudoAlignment, NotValidatingUniqueMapping, AddingExistingRead
+from kmer import (
+    KmerReference,
+    PseudoAlignment,
+    NotValidatingUniqueMapping,
+    AddingExistingRead,
+)
 
 
 def validate_file_readable(filepath: str, description: str):
@@ -59,9 +64,9 @@ def parse_arguments(args=None):
         type=int,
     )
     parser.add_argument("--reverse-complement", action="store_true")
-    parser.add_argument("--min-read-quality", type=int)
-    parser.add_argument("--min-kmer-quality", type=int)
-    parser.add_argument("--max-genomes", type=int)
+    parser.add_argument("--min-read-quality", type=int, default=None)
+    parser.add_argument("--min-kmer-quality", type=int, default=None)
+    parser.add_argument("--max-genomes", type=int, default=None)
     parser.add_argument("--genomes")
     parser.add_argument("--coverage")
     parser.add_argument("--window-size", type=int, default=100)
@@ -80,7 +85,6 @@ def create_reference(fasta_file, kmer_size):
 
 
 def create_reference_and_save_it(fasta_file, kmer_size, reference_file):
-    # Save reference to .kdb file using gzip pickle
     kmer_reference = create_reference(fasta_file, kmer_size)
     with gzip.open(reference_file, "wb") as f:
         pickle.dump(kmer_reference, f)
@@ -101,24 +105,85 @@ def build_reference_and_dump_from_file(fasta_file, kmer_size):
     dump_reference(kmer_reference)
 
 
-def create_alignment_file_from_reference(kmer_reference, reads_file, align_file, p, m):
+def create_alignment_from_reference(
+    kmer_reference, reads_file, p, m, min_read_quality, min_kmer_quality, max_genomes
+):
     reads_container = FASTAQFile(reads_file).container
     pseudo_alignment = PseudoAlignment(kmer_reference)
-    pseudo_alignment.align_reads_from_container(reads_container, p, m)
+    pseudo_alignment.align_reads_from_container(
+        reads_container, p, m, min_read_quality, min_kmer_quality, max_genomes
+    )
+    return pseudo_alignment
+
+
+def create_alignment_file_from_reference(
+    kmer_reference,
+    reads_file,
+    align_file,
+    p,
+    m,
+    min_read_quality,
+    min_kmer_quality,
+    max_genomes
+):
+    pseudo_alignment = create_alignment_from_reference(
+        kmer_reference,
+        reads_file,
+        p,
+        m,
+        min_read_quality,
+        min_kmer_quality,
+        max_genomes
+    )
     pseudo_alignment.save(align_file)
 
 
-def create_alignment_from_reference_file(reference_file, reads_file, align_file, p, m):
+def create_alignment_from_reference_file(
+    reference_file,
+    reads_file,
+    align_file,
+    p,
+    m,
+    min_read_quality,
+    min_kmer_quality,
+    max_genomes
+):
     with gzip.open(reference_file, "rb") as f:
         kmer_reference = pickle.load(f)
-    create_alignment_file_from_reference(kmer_reference, reads_file, align_file, p, m)
+    create_alignment_file_from_reference(
+        kmer_reference,
+        reads_file,
+        align_file,
+        p,
+        m,
+        min_read_quality,
+        min_kmer_quality,
+        max_genomes
+    )
 
 
 def build_reference_and_create_alignment_file(
-    fasta_file, kmer_size, reads_file, align_file, m, p
+    fasta_file,
+    kmer_size,
+    reads_file,
+    align_file,
+    m,
+    p,
+    min_read_quality,
+    min_kmer_quality,
+    max_genomes
 ):
     kmer_reference = create_reference(fasta_file, kmer_size)
-    create_alignment_file_from_reference(kmer_reference, reads_file, align_file, m, p)
+    create_alignment_file_from_reference(
+        kmer_reference,
+        reads_file,
+        align_file,
+        m,
+        p,
+        min_read_quality,
+        min_kmer_quality,
+        max_genomes
+    )
 
 
 def dump_alignment_file(align_file):
@@ -127,21 +192,46 @@ def dump_alignment_file(align_file):
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
 
 
-def dump_alignment_from_reference(reference_file, reads_file, m, p):
+def dump_alignment_from_reference(
+    reference_file, reads_file, m, p, min_read_quality, min_kmer_quality, max_genomes
+):
     with gzip.open(reference_file, "rb") as f:
         kmer_reference = pickle.load(f)
 
-    reads_container = FASTAQFile(reads_file).container
-    pseudo_alignment = PseudoAlignment(kmer_reference)
-    pseudo_alignment.align_reads_from_container(reads_container, m, p)
+    pseudo_alignment = create_alignment_from_reference(
+        kmer_reference,
+        reads_file,
+        p,
+        m,
+        min_read_quality,
+        min_kmer_quality,
+        max_genomes
+    )
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
 
-def build_reference_align_and_dump(fasta_file, kmer_size, reads_file, m, p):
+
+def build_reference_align_and_dump(
+    fasta_file,
+    kmer_size,
+    reads_file,
+    m,
+    p,
+    min_read_quality,
+    min_kmer_quality,
+    max_genomes
+):
     kmer_reference = create_reference(fasta_file, kmer_size)
-    reads_container = FASTAQFile(reads_file).container
-    pseudo_alignment = PseudoAlignment(kmer_reference)
-    pseudo_alignment.align_reads_from_container(reads_container, m, p)
+    pseudo_alignment = create_alignment_from_reference(
+        kmer_reference,
+        reads_file,
+        p,
+        m,
+        min_read_quality,
+        min_kmer_quality,
+        max_genomes
+    )
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
+
 
 def main():
     args = parse_arguments()
@@ -161,7 +251,7 @@ def main():
             if args.referencefile:
                 validate_file_readable(args.referencefile, "Reference database")
                 dump_reference_file(args.referencefile)
-                
+
             elif args.genomefile and args.kmer_size:
                 validate_file_readable(args.genomefile, "Genome FASTA")
                 build_reference_and_dump_from_file(args.genomefile, args.kmer_size)
@@ -172,7 +262,7 @@ def main():
         elif args.task == "align":
             validate_file_readable(args.reads, "FASTQ reads")
             validate_file_writable(args.alignfile, "Alignment output")
-            
+
             if args.referencefile and args.reads and args.alignfile:
                 validate_file_readable(args.referencefile, "Reference database")
                 create_alignment_from_reference_file(
@@ -181,6 +271,9 @@ def main():
                     args.alignfile,
                     args.unique_threshold,
                     args.ambiguous_threshold,
+                    args.min_read_quality,
+                    args.min_kmer_quality,
+                    args.max_genomes
                 )
             elif args.genomefile and args.kmer_size and args.reads and args.alignfile:
                 validate_file_readable(args.genomefile, "Genome FASTA")
@@ -191,6 +284,9 @@ def main():
                     args.alignfile,
                     args.unique_threshold,
                     args.ambiguous_threshold,
+                    args.min_read_quality,
+                    args.min_kmer_quality,
+                    args.max_genomes
                 )
             else:
                 sys.exit(
@@ -199,13 +295,15 @@ def main():
         elif args.task == "dumpalign":
             if args.referencefile and args.reads:
                 validate_file_readable(args.reads, "FASTQ reads")
-                validate_file_writable(args.alignfile, "Alignment output")
-            
+
                 dump_alignment_from_reference(
                     args.referencefile,
                     args.reads,
                     args.unique_threshold,
                     args.ambiguous_threshold,
+                    args.min_read_quality,
+                    args.min_kmer_quality,
+                    args.max_genomes
                 )
             if args.genomefile and args.kmer_size and args.reads:
                 validate_file_readable(args.reads, "FASTQ reads")
@@ -216,6 +314,9 @@ def main():
                     args.reads,
                     args.unique_threshold,
                     args.ambiguous_threshold,
+                    args.min_read_quality,
+                    args.min_kmer_quality,
+                    args.max_genomes
                 )
             elif args.alignfile:
                 validate_file_writable(args.alignfile, "Alignment output")
@@ -226,8 +327,14 @@ def main():
                 )
         else:
             sys.exit("Error: Unsupported task.")
-    except (InvalidExtensionError , NoRecordsInDataFile, NotValidatingUniqueMapping, AddingExistingRead) as err:
+    except (
+        InvalidExtensionError,
+        NoRecordsInDataFile,
+        NotValidatingUniqueMapping,
+        AddingExistingRead,
+    ) as err:
         sys.exit(err)
+
 
 if __name__ == "__main__":
     main()
