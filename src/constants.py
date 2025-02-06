@@ -9,3 +9,7 @@ PHRED33_SCORES = {
     char: ord(char)
     for char in r"`1234567890-=qwertyuiop[]\asdfghjkl;'zxcvbnm,./~!@#$%^&*()_+QWERTYUIOP{}|ASDFGHJKL:\"ZXCVBNM<>?"
 }
+
+DEFAULT_UNIQUE_THRESHOLD = 1
+DEFAULT_AMBIGUOUS_THRESHOLD = 1
+DEFAULT_SIMILARITY_THRESHOLD = 0.95
