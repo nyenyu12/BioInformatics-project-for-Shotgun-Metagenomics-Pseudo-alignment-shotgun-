@@ -10,7 +10,7 @@ import pickle
 from collections import namedtuple, defaultdict
 from enum import Enum
 from records import FASTAQRecordContainer, FASTARecordContainer, Record
-from typing import List, Dict, Iterator, Set, Tuple, Union
+from typing import List, Dict, Iterator, Set, Tuple, Union, Optional
 
 ## Global thresholds
 IGNORE_AMBIGUOUS_THRESHOLD = 0
@@ -20,42 +20,52 @@ M_THRESHOLD = 0
 ## Custom Exceptions
 ## ===========================================================
 
+
 ## @brief Exception raised when unique mapping validation fails.
 class NotValidatingUniqueMapping(Exception):
     """
     @brief Exception raised when unique mapping validation fails.
     """
+
     def __init__(self, message):
         super().__init__(message)
+
 
 ## @brief Exception raised when adding a read that already exists.
 class AddingExistingRead(Exception):
     """
     @brief Exception raised when adding a read that already exists.
     """
+
     def __init__(self, message):
         super().__init__(message)
+
 
 ## ===========================================================
 ## Enumerations
 ## ===========================================================
+
 
 ## @brief Enumeration for read mapping types.
 class ReadMappingType(Enum):
     """
     @brief Represents the type of mapping for a read.
     """
+
     UNMAPPED = 1
     UNIQUELY_MAPPED = 2
     AMBIGUOUSLY_MAPPED = 3
+
 
 ## @brief Enumeration for k-mer specificity.
 class KmerSpecifity(Enum):
     """
     @brief Indicates whether a k-mer is specific to one genome or unspecific.
     """
+
     SPECIFIC = 1
     UNSPECIFIC = 2
+
 
 ## ===========================================================
 ## Named Tuples
@@ -71,6 +81,7 @@ ReadMapping = namedtuple("ReadMapping", ["type", "genomes_mapped_to"])
 ## Helper Functions
 ## ===========================================================
 
+
 ## @brief Extracts up to k keys with the maximum values from a dictionary.
 #  @param d Dictionary with keys and values.
 #  @param k Number of keys to extract.
@@ -83,6 +94,7 @@ def extract_k_max_value_keys_from_dict(d, k):
     sorted_keys = sorted(d, key=d.get, reverse=True)
     return sorted_keys[:k]
 
+
 ## @brief Extracts all k-mers from a given genome sequence.
 #  @param k Length of the k-mer.
 #  @param genome Genome sequence as a string.
@@ -93,9 +105,11 @@ def extract_kmers_from_genome(k: int, genome: str) -> Iterator[Tuple[int, str]]:
     for i in range(len(genome) - k + 1):
         yield (i, genome[i : i + k])
 
+
 ## ===========================================================
 ## Class: KmerReference
 ## ===========================================================
+
 
 ## @brief Constructs a k-mer reference database from FASTA records.
 class KmerReference(object):
@@ -104,11 +118,13 @@ class KmerReference(object):
     #  @param fasta_record_container Container of genome records (FASTARecordContainer).
     #  @param filter_similar If True, applies similarity filtering to remove highly similar genomes.
     #  @param similarity_threshold Threshold (between 0 and 1) for considering genomes similar.
-    def __init__(self,
-                 k: int,
-                 fasta_record_container: FASTARecordContainer,
-                 filter_similar: bool = False,
-                 similarity_threshold: float = 0.95):
+    def __init__(
+        self,
+        k: int,
+        fasta_record_container: FASTARecordContainer,
+        filter_similar: bool = False,
+        similarity_threshold: float = 0.95,
+    ):
         if filter_similar and not (0 <= similarity_threshold <= 1):
             raise ValueError("similarity_threshold must be between 0 and 1")
 
@@ -143,7 +159,9 @@ class KmerReference(object):
     #  @return A tuple (genome_stats, genome_to_kmers).
     #          genome_stats: Dictionary mapping genome_id to its statistics.
     #          genome_to_kmers: Dictionary mapping genome_id to the set of k-mers found.
-    def _compute_genome_stats(self) -> Tuple[Dict[str, Dict[str, Union[int, float]]], Dict[str, Set[str]]]:
+    def _compute_genome_stats(
+        self,
+    ) -> Tuple[Dict[str, Dict[str, Union[int, float]]], Dict[str, Set[str]]]:
         genome_to_kmers: Dict[str, Set[str]] = {}
         for kmer, mapping in self.kmers.items():
             for genome_record in mapping.keys():
@@ -167,19 +185,30 @@ class KmerReference(object):
     ## @brief Sorts genomes based on uniqueness, total k-mers, genome length, and input order.
     #  @param genome_stats Dictionary of genome statistics.
     #  @return A sorted list of tuples (genome_id, stats).
-    def _sort_genomes_for_filtering(self, genome_stats: Dict[str, Dict[str, Union[int, float]]]) -> list:
-        return sorted(genome_stats.items(),
-                      key=lambda x: (x[1]["unique_kmers"], x[1]["total_kmers"], x[1]["genome_length"], x[1]["order"]))
+    def _sort_genomes_for_filtering(
+        self, genome_stats: Dict[str, Dict[str, Union[int, float]]]
+    ) -> list:
+        return sorted(
+            genome_stats.items(),
+            key=lambda x: (
+                x[1]["unique_kmers"],
+                x[1]["total_kmers"],
+                x[1]["genome_length"],
+                x[1]["order"],
+            ),
+        )
 
     ## @brief Applies a greedy filtering process to decide which genomes to keep.
     #  @param sorted_genomes Sorted list of (genome_id, stats).
     #  @param genome_to_kmers Mapping from genome_id to its set of k-mers.
     #  @param similarity_threshold Threshold for filtering.
     #  @return A tuple (kept_ids, similarity_info).
-    def _apply_greedy_filter(self,
-                               sorted_genomes: list,
-                               genome_to_kmers: Dict[str, Set[str]],
-                               similarity_threshold: float) -> Tuple[Set[str], Dict[str, Dict[str, Union[str, int, float]]]]:
+    def _apply_greedy_filter(
+        self,
+        sorted_genomes: list,
+        genome_to_kmers: Dict[str, Set[str]],
+        similarity_threshold: float,
+    ) -> Tuple[Set[str], Dict[str, Dict[str, Union[str, int, float]]]]:
         kept = []  # List of tuples (genome_id, set of k-mers) for kept genomes.
         similarity_info: Dict[str, Dict[str, Union[str, int, float]]] = {}
         for genome_id, stats in sorted_genomes:
@@ -187,7 +216,11 @@ class KmerReference(object):
             filtered_flag = False
             for kept_genome_id, kept_kmers in kept:
                 min_count = min(len(current_kmers), len(kept_kmers))
-                sim_score = (len(current_kmers.intersection(kept_kmers)) / min_count) if min_count > 0 else 0
+                sim_score = (
+                    (len(current_kmers.intersection(kept_kmers)) / min_count)
+                    if min_count > 0
+                    else 0
+                )
                 if sim_score > similarity_threshold:
                     similarity_info[genome_id] = {
                         "kept": "no",
@@ -209,7 +242,11 @@ class KmerReference(object):
                     "similarity_score": "NA",
                 }
                 kept.append((genome_id, current_kmers))
-        kept_ids = {genome_id for genome_id, info in similarity_info.items() if info["kept"] == "yes"}
+        kept_ids = {
+            genome_id
+            for genome_id, info in similarity_info.items()
+            if info["kept"] == "yes"
+        }
         return kept_ids, similarity_info
 
     ## @brief Removes k-mer mappings for genomes not in the kept_ids set.
@@ -226,7 +263,9 @@ class KmerReference(object):
     ## @brief Updates the list of genomes to include only those in kept_ids.
     #  @param kept_ids Set of genome IDs that are kept.
     def _update_genomes_list(self, kept_ids: Set[str]) -> None:
-        self.genomes = [genome for genome in self.genomes if genome.identifier in kept_ids]
+        self.genomes = [
+            genome for genome in self.genomes if genome.identifier in kept_ids
+        ]
 
     ## @brief Applies the overall filtering process to remove highly similar genomes.
     #  @param similarity_threshold Threshold for filtering.
@@ -234,7 +273,9 @@ class KmerReference(object):
     def _filter_similar_genomes(self, similarity_threshold: float) -> None:
         genome_stats, genome_to_kmers = self._compute_genome_stats()
         sorted_genomes = self._sort_genomes_for_filtering(genome_stats)
-        kept_ids, similarity_info = self._apply_greedy_filter(sorted_genomes, genome_to_kmers, similarity_threshold)
+        kept_ids, similarity_info = self._apply_greedy_filter(
+            sorted_genomes, genome_to_kmers, similarity_threshold
+        )
         self._remove_filtered_genomes_from_kmers(kept_ids)
         self._update_genomes_list(kept_ids)
         self.similarity_info = similarity_info
@@ -268,14 +309,21 @@ class KmerReference(object):
 
     ## @brief Returns a summary of the k-mer reference database.
     #  @return A dictionary containing k-mer details, genome summary, and filtering similarity info if available.
-    def get_summary(self) -> Dict[str, Dict[str, Union[Dict[str, List[int]], Dict[str, int], Dict[str, Dict]]]]:
+    def get_summary(
+        self,
+    ) -> Dict[
+        str, Dict[str, Union[Dict[str, List[int]], Dict[str, int], Dict[str, Dict]]]
+    ]:
         kmer_details = {
-            kmer: {genome["description"]: sorted(positions)
-                   for genome, positions in genomes.items()}
+            kmer: {
+                genome["description"]: sorted(positions)
+                for genome, positions in genomes.items()
+            }
             for kmer, genomes in self.kmers.items()
         }
         genome_summary: defaultdict[str, Dict[str, int]] = defaultdict(
-            lambda: {"total_bases": 0, "unique_kmers": 0, "multi_mapping_kmers": 0})
+            lambda: {"total_bases": 0, "unique_kmers": 0, "multi_mapping_kmers": 0}
+        )
         genome_kmer_count = defaultdict(set)
         for kmer, genomes in self.kmers.items():
             for genome, positions in genomes.items():
@@ -283,7 +331,9 @@ class KmerReference(object):
                 genome_summary[description]["total_bases"] = len(genome["genome"])
                 genome_kmer_count[description].add(kmer)
         for genome in genome_kmer_count:
-            unique_kmers = sum(1 for kmer in genome_kmer_count[genome] if len(self.kmers[kmer]) == 1)
+            unique_kmers = sum(
+                1 for kmer in genome_kmer_count[genome] if len(self.kmers[kmer]) == 1
+            )
             multi_mapping_kmers = len(genome_kmer_count[genome]) - unique_kmers
             genome_summary[genome]["unique_kmers"] = unique_kmers
             genome_summary[genome]["multi_mapping_kmers"] = multi_mapping_kmers
@@ -292,9 +342,11 @@ class KmerReference(object):
             summary_dict["Similarity"] = self.similarity_info
         return summary_dict
 
+
 ## ===========================================================
 ## Class: Read
 ## ===========================================================
+
 
 ## @brief Represents a sequencing read.
 class Read:
@@ -341,11 +393,19 @@ class Read:
     #  @param kmer_reference The KmerReference instance.
     #  @param min_kmer_quality Optional minimum quality threshold for a k-mer.
     #  @param max_genomes Optional maximum allowed genome mappings for a k-mer.
-    def extract_kmer_references(self, kmer_reference: KmerReference,
-                                min_kmer_quality: int = None,
-                                max_genomes: int = None):
-        for start, kmer in extract_kmers_from_genome(kmer_reference.kmer_len, self.__raw_read):
-            if min_kmer_quality and self.kmer_quality(start, kmer_reference.kmer_len) < min_kmer_quality:
+    def extract_kmer_references(
+        self,
+        kmer_reference: KmerReference,
+        min_kmer_quality: int = None,
+        max_genomes: int = None,
+    ):
+        for start, kmer in extract_kmers_from_genome(
+            kmer_reference.kmer_len, self.__raw_read
+        ):
+            if (
+                min_kmer_quality
+                and self.kmer_quality(start, kmer_reference.kmer_len) < min_kmer_quality
+            ):
                 self.num_quality_filtered_kmers += 1
                 continue
             single_kmer_reference = kmer_reference.get_kmer_references(kmer)
@@ -353,8 +413,14 @@ class Read:
                 if max_genomes and len(single_kmer_reference) > max_genomes:
                     self.num_redundant_kmers += 1
                     continue
-                kmer_specifity = (KmerSpecifity.SPECIFIC if len(single_kmer_reference) == 1 else KmerSpecifity.UNSPECIFIC)
-                self.kmers[kmer] = ReadKmer(specifity=kmer_specifity, references=single_kmer_reference)
+                kmer_specifity = (
+                    KmerSpecifity.SPECIFIC
+                    if len(single_kmer_reference) == 1
+                    else KmerSpecifity.UNSPECIFIC
+                )
+                self.kmers[kmer] = ReadKmer(
+                    specifity=kmer_specifity, references=single_kmer_reference
+                )
 
     ## @brief Generates counts of genome mappings from the read's k-mers.
     #  @param map_count If True, only counts specific mappings.
@@ -375,20 +441,35 @@ class Read:
             raise ValueError("m must be non-negative")
         self.__genomes_map_count = self.generate_genome_counts(map_count=True)
         if len(self.__genomes_map_count) == 1:
-            self.mapping = ReadMapping(ReadMappingType.UNIQUELY_MAPPED, [list(self.__genomes_map_count.keys())[0]])
+            self.mapping = ReadMapping(
+                ReadMappingType.UNIQUELY_MAPPED,
+                [list(self.__genomes_map_count.keys())[0]],
+            )
             return True
         if len(self.__genomes_map_count) > 1:
-            sorted_genomes = sorted(self.__genomes_map_count, key=self.__genomes_map_count.get, reverse=True)
-            if self.__genomes_map_count[sorted_genomes[0]] >= self.__genomes_map_count[sorted_genomes[1]] + m:
-                self.mapping = ReadMapping(ReadMappingType.UNIQUELY_MAPPED, [sorted_genomes[0]])
+            sorted_genomes = sorted(
+                self.__genomes_map_count, key=self.__genomes_map_count.get, reverse=True
+            )
+            if (
+                self.__genomes_map_count[sorted_genomes[0]]
+                >= self.__genomes_map_count[sorted_genomes[1]] + m
+            ):
+                self.mapping = ReadMapping(
+                    ReadMappingType.UNIQUELY_MAPPED, [sorted_genomes[0]]
+                )
                 return True
-        self.mapping = ReadMapping(ReadMappingType.AMBIGUOUSLY_MAPPED, list(self.__genomes_map_count.keys()))
+        self.mapping = ReadMapping(
+            ReadMappingType.AMBIGUOUSLY_MAPPED, list(self.__genomes_map_count.keys())
+        )
         return False
 
     ## @brief Validates the unique mapping by comparing total k-mer counts.
     #  @param p Allowable difference threshold.
     def validate_unique_mappings(self, p: int):
-        if self.mapping.type != ReadMappingType.UNIQUELY_MAPPED or p < IGNORE_AMBIGUOUS_THRESHOLD:
+        if (
+            self.mapping.type != ReadMappingType.UNIQUELY_MAPPED
+            or p < IGNORE_AMBIGUOUS_THRESHOLD
+        ):
             return
         genome_total_counts = self.generate_genome_counts(map_count=False)
         mapped_genome = self.mapping.genomes_mapped_to[0]
@@ -399,7 +480,9 @@ class Read:
             for genome, count in genome_total_counts.items():
                 if count >= mapped_genome_kmers:
                     ambiguous_genomes.append(genome)
-            self.mapping = ReadMapping(ReadMappingType.AMBIGUOUSLY_MAPPED, ambiguous_genomes)
+            self.mapping = ReadMapping(
+                ReadMappingType.AMBIGUOUSLY_MAPPED, ambiguous_genomes
+            )
 
     ## @brief Performs pseudo-alignment applying quality and redundancy filters.
     #  @param kmer_reference The KmerReference instance.
@@ -410,22 +493,28 @@ class Read:
     #  @param max_genomes Optional maximum allowed genome mappings for a k-mer.
     #  @param debug If True, prints debug information.
     #  @return The resulting ReadMappingType.
-    def pseudo_align(self,
-                     kmer_reference: KmerReference,
-                     p: int = 1,
-                     m: int = 1,
-                     min_read_quality: int = None,
-                     min_kmer_quality: int = None,
-                     max_genomes: int = None,
-                     debug: bool = False) -> ReadMappingType:
-        if not (isinstance(kmer_reference, KmerReference)
-                and isinstance(p, int)
-                and isinstance(m, int)
-                and (min_read_quality is None or isinstance(min_read_quality, int))
-                and (min_kmer_quality is None or isinstance(min_kmer_quality, int))
-                and (max_genomes is None or isinstance(max_genomes, int))
-                and isinstance(debug, bool)):
-            raise TypeError(f"Invalid types given to pseudo align: {type(kmer_reference)}, {type(p)}, {type(m)}, {type(debug)}")
+    def pseudo_align(
+        self,
+        kmer_reference: KmerReference,
+        p: int = 1,
+        m: int = 1,
+        min_read_quality: int = None,
+        min_kmer_quality: int = None,
+        max_genomes: int = None,
+        debug: bool = False,
+    ) -> ReadMappingType:
+        if not (
+            isinstance(kmer_reference, KmerReference)
+            and isinstance(p, int)
+            and isinstance(m, int)
+            and (min_read_quality is None or isinstance(min_read_quality, int))
+            and (min_kmer_quality is None or isinstance(min_kmer_quality, int))
+            and (max_genomes is None or isinstance(max_genomes, int))
+            and isinstance(debug, bool)
+        ):
+            raise TypeError(
+                f"Invalid types given to pseudo align: {type(kmer_reference)}, {type(p)}, {type(m)}, {type(debug)}"
+            )
         if m < M_THRESHOLD:
             raise ValueError(f"m must be bigger than or equal to {M_THRESHOLD}")
 
@@ -438,16 +527,22 @@ class Read:
 
         if self.try_to_align_specific(m):
             if debug:
-                print(f"[DEBUG pseudo_align]: After try_to_align_specific self.mapping: {self.mapping.type}")
+                print(
+                    f"[DEBUG pseudo_align]: After try_to_align_specific self.mapping: {self.mapping.type}"
+                )
             self.validate_unique_mappings(p)
             return self.mapping.type
         elif debug:
-            print(f"[DEBUG pseudo_align]: After try_to_align_specific self.mapping: {self.mapping.type}, mapped to: {self.mapping}")
+            print(
+                f"[DEBUG pseudo_align]: After try_to_align_specific self.mapping: {self.mapping.type}, mapped to: {self.mapping}"
+            )
         return ReadMappingType.AMBIGUOUSLY_MAPPED
+
 
 ## ===========================================================
 ## Class: PseudoAlignment
 ## ===========================================================
+
 
 ## @brief Manages pseudo-alignment of reads using a k-mer reference.
 class PseudoAlignment:
@@ -460,14 +555,22 @@ class PseudoAlignment:
         self.filtered_quality_kmers: int = 0
         self.filtered_hr_kmers: int = 0
 
+        self.filter_read_quality_flag: bool = False
+        self.filter_kmer_quality_flag: bool = False
+        self.filter_max_genomes_flag: bool = False
+
     ## @brief Adds an aligned read to the alignment.
     #  @param read The Read object to add.
     def add_read(self, read: Read):
         if read.identifier in self.reads:
-            raise AddingExistingRead(f"There already exists a read with identifier: {read.identifier}")
+            raise AddingExistingRead(
+                f"There already exists a read with identifier: {read.identifier}"
+            )
         self.reads[read.identifier] = {
             "mapping_type": read.mapping.type,
-            "genomes_mapped_to": [genome.identifier for genome in read.mapping.genomes_mapped_to],
+            "genomes_mapped_to": [
+                genome.identifier for genome in read.mapping.genomes_mapped_to
+            ],
         }
 
     ## @brief Aligns a read from a FASTAQ record while applying filters.
@@ -477,21 +580,35 @@ class PseudoAlignment:
     #  @param min_read_quality Optional minimum read quality threshold.
     #  @param min_kmer_quality Optional minimum k-mer quality threshold.
     #  @param max_genomes Optional maximum allowed genomes for a k-mer.
-    def add_read_from_read_record(self,
-                                  read_record: Record,
-                                  m: int = 1,
-                                  p: int = 1,
-                                  min_read_quality: int = None,
-                                  min_kmer_quality: int = None,
-                                  max_genomes: int = None):
+    def add_read_from_read_record(
+        self,
+        read_record: Record,
+        m: int = 1,
+        p: int = 1,
+        min_read_quality: int = None,
+        min_kmer_quality: int = None,
+        max_genomes: int = None,
+    ):
+
+        if min_read_quality is not None:
+            self.filter_read_quality_flag = True
+        if min_kmer_quality is not None:
+            self.filter_kmer_quality_flag = True
+        if max_genomes is not None:
+            self.filter_max_genomes_flag = True
+
         read = Read(read_record)
         if min_read_quality and read.mean_quality() < min_read_quality:
             self.filtered_quality_reads += 1
             return
-        read.pseudo_align(self.kmer_reference, m=m, p=p,
-                          min_read_quality=min_read_quality,
-                          min_kmer_quality=min_kmer_quality,
-                          max_genomes=max_genomes)
+        read.pseudo_align(
+            self.kmer_reference,
+            m=m,
+            p=p,
+            min_read_quality=min_read_quality,
+            min_kmer_quality=min_kmer_quality,
+            max_genomes=max_genomes,
+        )
         if min_kmer_quality:
             self.filtered_quality_kmers += read.num_quality_filtered_kmers
         if max_genomes:
@@ -505,18 +622,24 @@ class PseudoAlignment:
     #  @param min_read_quality Optional minimum read quality threshold.
     #  @param min_kmer_quality Optional minimum k-mer quality threshold.
     #  @param max_genomes Optional maximum allowed genomes for a k-mer.
-    def align_reads_from_container(self,
-                                   reads_container: FASTAQRecordContainer,
-                                   m: int = 1,
-                                   p: int = 1,
-                                   min_read_quality: int = None,
-                                   min_kmer_quality: int = None,
-                                   max_genomes: int = None):
+    def align_reads_from_container(
+        self,
+        reads_container: FASTAQRecordContainer,
+        m: int = 1,
+        p: int = 1,
+        min_read_quality: int = None,
+        min_kmer_quality: int = None,
+        max_genomes: int = None,
+    ):
         for read_record in reads_container:
-            self.add_read_from_read_record(read_record, m=m, p=p,
-                                           min_read_quality=min_read_quality,
-                                           min_kmer_quality=min_kmer_quality,
-                                           max_genomes=max_genomes)
+            self.add_read_from_read_record(
+                read_record,
+                m=m,
+                p=p,
+                min_read_quality=min_read_quality,
+                min_kmer_quality=min_kmer_quality,
+                max_genomes=max_genomes,
+            )
 
     ## @brief Returns a summary of the alignment.
     #  @return Dictionary with alignment statistics and genome mapping summary.
@@ -525,16 +648,21 @@ class PseudoAlignment:
             "unique_mapped_reads": 0,
             "ambiguous_mapped_reads": 0,
             "unmapped_reads": 0,
-            "filtered_quality_reads": self.filtered_quality_reads,
-            "filtered_quality_kmers": self.filtered_quality_kmers,
-            "filtered_hr_kmers": self.filtered_hr_kmers,
         }
+
+        if self.filter_read_quality_flag:
+            summary["filtered_quality_reads"] = self.filtered_quality_reads
+        if self.filter_kmer_quality_flag:
+            summary["filtered_quality_kmers"] = self.filtered_quality_kmers
+        if self.filter_max_genomes_flag:
+            summary["filtered_hr_kmers"] = self.filtered_hr_kmers
+
         genome_mapping: Dict[str, Dict[str, int]] = {}
         for _, read_alignment_details in self.reads.items():
             mapping_type = read_alignment_details["mapping_type"]
             genomes_mapped_to = read_alignment_details["genomes_mapped_to"]
             if mapping_type != ReadMappingType.UNMAPPED:
-                read_type_string: str = None
+                read_type_string: Optional[str] = None
                 if mapping_type == ReadMappingType.UNIQUELY_MAPPED:
                     summary["unique_mapped_reads"] += 1
                     read_type_string = "unique_reads"
@@ -542,7 +670,9 @@ class PseudoAlignment:
                     summary["ambiguous_mapped_reads"] += 1
                     read_type_string = "ambiguous_reads"
                 for genome in genomes_mapped_to:
-                    genome_mapping.setdefault(genome, {"unique_reads": 0, "ambiguous_reads": 0})
+                    genome_mapping.setdefault(
+                        genome, {"unique_reads": 0, "ambiguous_reads": 0}
+                    )
                     genome_mapping[genome][read_type_string] += 1
             else:
                 summary["unmapped_reads"] += 1
@@ -578,4 +708,8 @@ class PseudoAlignment:
     #  @param mapping_type The desired ReadMappingType.
     #  @return List of read identifiers.
     def get_reads_by_mapping_type(self, mapping_type: ReadMappingType) -> List[str]:
-        return [read_id for read_id, details in self.reads.items() if details["mapping_type"] == mapping_type]
+        return [
+            read_id
+            for read_id, details in self.reads.items()
+            if details["mapping_type"] == mapping_type
+        ]
