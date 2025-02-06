@@ -487,7 +487,7 @@ def test_save_and_load_for_pseudo_alignment(pseudo_alignment, create_read, creat
 
 
 ## ===========================================================
-## Quality Filtering Tests
+## Quality Filtering Tests Extension (4.1)
 ## ===========================================================
 
 def test_min_read_quality_filter(pseudo_alignment, sample_fastq_container):

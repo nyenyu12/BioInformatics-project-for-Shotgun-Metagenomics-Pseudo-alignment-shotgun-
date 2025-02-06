@@ -20,11 +20,9 @@ from records import (
 import pytest
 from typing import List, Any
 
-
 ## ===========================================================
 ## Section and SectionSpecification Tests
 ## ===========================================================
-
 
 def test_section_creation() -> None:
     """
@@ -56,11 +54,9 @@ def test_section_specification_creation() -> None:
     assert spec.chars_to_remove == "\\s"
     assert spec.is_unique_index is False
 
-
 ## ===========================================================
 ## Record Class Tests
 ## ===========================================================
-
 
 def test_record_creation() -> None:
     """
@@ -101,11 +97,9 @@ def test_record_duplicate_sections() -> None:
     ):
         Record(sections)
 
-
 ## ===========================================================
 ## RecordContainer and MockRecordContainer Tests
 ## ===========================================================
-
 
 class MockRecordContainer(RecordContainer):
     SECTION_SPECIFICATIONS = (
@@ -224,11 +218,9 @@ def test_mock_record_container_valid_endings() -> None:
         assert records[0]["header"] == "AGCTAGCT"
         assert records[0]["sequence"] == "AGCTAGCT"
 
-
 ## ===========================================================
 ## FASTARecordContainer Tests
 ## ===========================================================
-
 
 def test_FASTARecordContainer_parse_records_valid_data() -> None:
     """
@@ -273,11 +265,9 @@ def test_FASTARecordContainer_parse_records_invalid_data() -> None:
     with pytest.raises(UnparsedDataError):
         container.parse_records(data)
 
-
 ## ===========================================================
 ## FASTAQRecordContainer Tests
 ## ===========================================================
-
 
 def test_FASTAQRecordContainer_valid() -> None:
     """

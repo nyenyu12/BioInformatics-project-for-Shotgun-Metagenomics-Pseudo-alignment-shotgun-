@@ -11,12 +11,10 @@ import pytest
 from pathlib import Path
 from data_file import FASTAFile, FASTAQFile, NoRecordsInDataFile, InvalidExtensionError
 
-
 ## ===========================================================
 ## FASTAFile Tests
 ## ===========================================================
 
-## @brief Test loading a regular FASTA file.
 def test_fasta_file_loading(tmp_path: Path) -> None:
     """
     @brief Test that a FASTA file is loaded correctly.
@@ -30,7 +28,6 @@ def test_fasta_file_loading(tmp_path: Path) -> None:
     assert len(list(fasta_file.container)) == 2
 
 
-## @brief Test loading a gzip-compressed FASTA file.
 def test_fasta_gz_file_loading(tmp_path: Path) -> None:
     """
     @brief Test that a gzipped FASTA file is loaded correctly.
@@ -46,7 +43,6 @@ def test_fasta_gz_file_loading(tmp_path: Path) -> None:
     assert len(list(fasta_file.container)) == 2
 
 
-## @brief Test that a file with an invalid extension for FASTAFile raises an error.
 def test_fasta_file_invalid_extension(tmp_path: Path) -> None:
     """
     @brief Test that FASTAFile raises InvalidExtensionError when loaded from a file with an invalid extension.
@@ -58,7 +54,6 @@ def test_fasta_file_invalid_extension(tmp_path: Path) -> None:
         FASTAFile(str(invalid_path))
 
 
-## @brief Test that an empty FASTA file raises NoRecordsInDataFile.
 def test_no_records_in_fasta_file(tmp_path: Path) -> None:
     """
     @brief Test that parsing an empty FASTA file raises NoRecordsInDataFile.
@@ -70,7 +65,6 @@ def test_no_records_in_fasta_file(tmp_path: Path) -> None:
         FASTAFile(str(empty_fasta_path))
 
 
-## @brief Test dumping a FASTAFile container.
 def test_fasta_file_dump(tmp_path: Path) -> None:
     """
     @brief Test that a FASTAFile container can be dumped and reloaded.
@@ -89,12 +83,10 @@ def test_fasta_file_dump(tmp_path: Path) -> None:
     
     assert len(list(data)) == 2
 
-
 ## ===========================================================
 ## FASTAQFile Tests
 ## ===========================================================
 
-## @brief Test loading a regular FASTQ file.
 def test_fastq_file_loading(tmp_path: Path) -> None:
     """
     @brief Test that a FASTQ file is loaded correctly.
@@ -108,7 +100,6 @@ def test_fastq_file_loading(tmp_path: Path) -> None:
     assert len(list(fastq_file.container)) == 2
 
 
-## @brief Test loading a gzip-compressed FASTQ file.
 def test_fastq_gz_file_loading(tmp_path: Path) -> None:
     """
     @brief Test that a gzipped FASTQ file is loaded correctly.
@@ -124,7 +115,6 @@ def test_fastq_gz_file_loading(tmp_path: Path) -> None:
     assert len(list(fastq_file.container)) == 2
 
 
-## @brief Test that a file with an invalid extension for FASTAQFile raises an error.
 def test_fastq_file_invalid_extension(tmp_path: Path) -> None:
     """
     @brief Test that FASTAQFile raises InvalidExtensionError when loaded from a file with an invalid extension.
@@ -136,7 +126,6 @@ def test_fastq_file_invalid_extension(tmp_path: Path) -> None:
         FASTAQFile(str(invalid_path))
 
 
-## @brief Test that an empty FASTQ file raises NoRecordsInDataFile.
 def test_no_records_in_fastq_file(tmp_path: Path) -> None:
     """
     @brief Test that parsing an empty FASTQ file raises NoRecordsInDataFile.

@@ -13,8 +13,10 @@ import gzip
 import pickle
 from pathlib import Path
 from typing import List, Tuple, Dict, Any
-
 from unittest.mock import patch
+
+from kmer import KmerReference
+from records import FASTARecordContainer
 from main import (
     validate_file_readable,
     validate_file_writable,
@@ -25,10 +27,12 @@ from main import (
 ## Helper Functions
 ## ===========================================================
 
-## @brief Runs a subprocess command and returns its output.
-#  @param command List of command arguments.
-#  @return A tuple containing (stdout, stderr, return code).
 def run_command(command: List[str]) -> Tuple[str, str, int]:
+    """
+    @brief Runs a subprocess command and returns its output.
+    @param command List of command arguments.
+    @return A tuple containing (stdout, stderr, return code).
+    """
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     return result.stdout, result.stderr, result.returncode
 
@@ -37,11 +41,13 @@ def run_command(command: List[str]) -> Tuple[str, str, int]:
 ## Fixtures
 ## ===========================================================
 
-## @brief Creates a temporary directory with test data files.
-#  @param tmp_path A temporary directory provided by pytest.
-#  @return Dictionary with paths for genome, FASTQ, reference, and alignment files.
 @pytest.fixture
 def test_data_dir(tmp_path: Path) -> Dict[str, Path]:
+    """
+    @brief Creates a temporary directory with test data files.
+    @param tmp_path A temporary directory provided by pytest.
+    @return Dictionary with paths for genome, FASTQ, reference, and alignment files.
+    """
     genome_file: Path = tmp_path / "test_genome.fa"
     fastq_file: Path = tmp_path / "test_reads.fq"
     reference_file: Path = tmp_path / "test_reference.kdb"
@@ -62,12 +68,15 @@ def test_data_dir(tmp_path: Path) -> Dict[str, Path]:
         "align_file": align_file,
     }
 
+
 ## ===========================================================
 ## Tests: Reference and Alignment Commands
 ## ===========================================================
 
-## @brief Test creating a k-mer reference database.
 def test_create_reference(test_data_dir: Dict[str, Path]) -> None:
+    """
+    @brief Test creating a k-mer reference database.
+    """
     stdout, stderr, returncode = run_command([
         "python3", "main.py",
         "-t", "reference",
@@ -84,8 +93,10 @@ def test_create_reference(test_data_dir: Dict[str, Path]) -> None:
     assert kmer_reference is not None, "Failed to load reference from file."
 
 
-## @brief Test dumping a reference database to JSON.
 def test_dump_reference(test_data_dir: Dict[str, Path]) -> None:
+    """
+    @brief Test dumping a reference database to JSON.
+    """
     # Ensure reference is created first.
     test_create_reference(test_data_dir)
 
@@ -102,8 +113,10 @@ def test_dump_reference(test_data_dir: Dict[str, Path]) -> None:
         pytest.fail("Reference dump output is not valid JSON.")
 
 
-## @brief Test aligning reads using a pre-built reference.
 def test_align_reads(test_data_dir: Dict[str, Path]) -> None:
+    """
+    @brief Test aligning reads using a pre-built reference.
+    """
     # Ensure reference is created first.
     test_create_reference(test_data_dir)
     stdout, stderr, returncode = run_command([
@@ -120,8 +133,10 @@ def test_align_reads(test_data_dir: Dict[str, Path]) -> None:
     assert pseudo_alignment is not None, "Failed to load alignment from file."
 
 
-## @brief Test dumping an alignment file.
 def test_dump_alignment(test_data_dir: Dict[str, Path]) -> None:
+    """
+    @brief Test dumping an alignment file.
+    """
     # Ensure alignment is created first.
     test_align_reads(test_data_dir)
     stdout, stderr, returncode = run_command([
@@ -137,8 +152,10 @@ def test_dump_alignment(test_data_dir: Dict[str, Path]) -> None:
         pytest.fail("Alignment dump output is not valid JSON.")
 
 
-## @brief Test building a reference, aligning reads, and dumping results in one step.
 def test_build_reference_align_and_dump(test_data_dir: Dict[str, Path]) -> None:
+    """
+    @brief Test building a reference, aligning reads, and dumping results in one step.
+    """
     stdout, stderr, returncode = run_command([
         "python3", "main.py",
         "-t", "dumpalign",
@@ -158,8 +175,10 @@ def test_build_reference_align_and_dump(test_data_dir: Dict[str, Path]) -> None:
 ## Tests: Invalid File Handling
 ## ===========================================================
 
-## @brief Test handling of missing or invalid files.
 def test_invalid_file_handling(test_data_dir: Dict[str, Path]) -> None:
+    """
+    @brief Test handling of missing or invalid files.
+    """
     invalid_file: Path = test_data_dir["genome_file"].parent / "invalid_file.fa"
     stdout, stderr, returncode = run_command([
         "python3", "main.py",
@@ -208,8 +227,10 @@ def test_invalid_file_handling(test_data_dir: Dict[str, Path]) -> None:
 ## Tests: Invalid Task Handling
 ## ===========================================================
 
-## @brief Test that an invalid task returns an error.
 def test_invalid_task() -> None:
+    """
+    @brief Test that an invalid task returns an error.
+    """
     stdout, stderr, returncode = run_command([
         "python3", "main.py",
         "-t", "invalidtask"
@@ -222,8 +243,10 @@ def test_invalid_task() -> None:
 ## Tests: EXTSIM (Extension 4.4)
 ## ===========================================================
 
-## @brief Test EXTSIM filtering of highly similar genomes.
 def test_extsim_filter_similar_genomes(tmp_path: Path) -> None:
+    """
+    @brief Test EXTSIM filtering of highly similar genomes.
+    """
     fasta_content: str = (
         ">GenomeA\nAGCTAGCTAGCT\n"
         ">GenomeB\nAGCTAGCTAGCT\n"  # Identical to GenomeA; should be filtered.
@@ -255,20 +278,71 @@ def test_extsim_filter_similar_genomes(tmp_path: Path) -> None:
     else:
         assert "GenomeB" in kept_ids, "GenomeA should be filtered out."
 
+def test_no_filter_similar_genomes():
+    """
+    @brief Test that when filtering is disabled, all genomes are retained.
+    """
+    data = (
+        ">GenomeA\nAGCTAGCTAGCT\n"
+        ">GenomeB\nAGCTAGCTAGCT\n"
+    )
+    container = FASTARecordContainer()
+    container.parse_records(data)
+    kref = KmerReference(4, container, filter_similar=False)
+    assert not hasattr(kref, "similarity_info")
+    kept_ids = {genome.identifier for genome in kref.genomes}
+    assert "GenomeA" in kept_ids and "GenomeB" in kept_ids
+
+def test_similarity_info_in_summary():
+    """
+    @brief Test that the JSON summary includes a 'Similarity' section when filtering is enabled.
+    """
+    data = (
+        ">GenomeA\nAGCTAGCTAGCT\n"
+        ">GenomeB\nAGCTAGCTAGCT\n"
+        ">GenomeC\nTGCATGCATGCA\n"
+    )
+    container = FASTARecordContainer()
+    container.parse_records(data)
+    kref = KmerReference(4, container, filter_similar=True, similarity_threshold=0.95)
+    summary = kref.get_summary()
+    assert "Similarity" in summary
+    sim_info = summary["Similarity"]
+    assert "GenomeA" in sim_info
+    assert "GenomeB" in sim_info
+    assert "GenomeC" in sim_info
+
+def test_single_genome_no_filter():
+    """
+    @brief Test that with a single genome, filtering does nothing.
+    """
+    data = ">GenomeA\nAGCTAGCTAGCT\n"
+    container = FASTARecordContainer()
+    container.parse_records(data)
+    kref = KmerReference(4, container, filter_similar=True, similarity_threshold=0.95)
+    kept_ids = {genome.identifier for genome in kref.genomes}
+    assert kept_ids == {"GenomeA"}
+    summary = kref.get_summary()
+    assert "Similarity" in summary
+    assert summary["Similarity"]["GenomeA"]["kept"] == "yes"
+    assert summary["Similarity"]["GenomeA"]["similar_to"] == "NA"
 
 ## ===========================================================
 ## Tests: Additional Main.py Functions
 ## ===========================================================
 
-## @brief Test that validate_file_readable correctly detects a missing file.
 def test_validate_file_readable(tmp_path: Path) -> None:
+    """
+    @brief Test that validate_file_readable correctly detects a missing file.
+    """
     test_file: Path = tmp_path / "missing_file.fq"
     with pytest.raises(SystemExit):
         validate_file_readable(str(test_file), "FASTQ reads")
 
-
-## @brief Test that validate_file_writable correctly detects unwritable locations.
 def test_validate_file_writable(tmp_path: Path) -> None:
+    """
+    @brief Test that validate_file_writable correctly detects unwritable locations.
+    """
     unwritable_dir: Path = tmp_path / "readonly_dir"
     unwritable_dir.mkdir()
     os.chmod(unwritable_dir, 0o400)  # Make directory read-only.
@@ -277,10 +351,11 @@ def test_validate_file_writable(tmp_path: Path) -> None:
         validate_file_writable(str(unwritable_file), "Alignment output")
     os.chmod(unwritable_dir, 0o700)  # Reset permissions.
 
-
-## @brief Test that parse_arguments sets default values when optional arguments are missing.
 @patch("sys.exit")
 def test_parse_arguments_default_values(mock_exit: Any) -> None:
+    """
+    @brief Test that parse_arguments sets default values when optional arguments are missing.
+    """
     test_args: List[str] = ["-t", "align", "--reads", "reads.fq", "-a", "output.aln"]
     with patch("sys.argv", ["main.py"] + test_args):
         args = parse_arguments()
