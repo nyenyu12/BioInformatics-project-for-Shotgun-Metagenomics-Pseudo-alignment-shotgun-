@@ -4,7 +4,9 @@ ls -lath
 
 #
 # test show
+cd ../
 /home/nyenyu/intro/project/bin/pytest -xv --cov
+cd run_log_dir
 
 # 
 # 1. Create a reference with k=31 using the mid‑sized simulated reference file.
@@ -101,13 +103,6 @@ python3 ../main.py -t dumpalign \
     --min-read-quality 59 \
     --min-kmer-quality 60 \
     --max-genomes 2 \
-    -m 1 \
-    -p 1 > align_ambig_31_flags_final
-
-python3 ../main.py -t dumpalign \
-    -g ./smpref_T5_5uniq_1k_genome.fa \
-    -k 31 \
-    --reads ./smpref_T5_5uniq_1k_genometile.fq \
     -m 1 \
     -p 1 > align_ambig_31_flags_final
 
