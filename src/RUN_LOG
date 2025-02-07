@@ -2,9 +2,12 @@
 date
 ls -lath
 
+#
+# test show
+/home/nyenyu/intro/project/bin/pytest -xv --cov
+
 # 
 # 1. Create a reference with k=31 using the mid‑sized simulated reference file.
-echo "Creating reference (k=31)..."
 python3 ../main.py -t reference \
     -g ../example_simulated_data/example_ref_mid_clean.fa \
     -k 31 \
@@ -13,15 +16,13 @@ ls -lath REFERENCEFILE.kdb
 
 #
 # 2. Dump the summary of the just‐created reference.
-# lookup: \d+\n\d+, Summary
-echo "Dumping reference summary for REFERENCEFILE.kdb..."
+# lookup: \d+,\n\s+\d+, Summary
 python3 ../main.py -t dumpref \
     -r REFERENCEFILE.kdb > dump_ref_31
 ls -lath REFERENCEFILE.kdb
 
 #
 # 3. Create a reference with k=75 (using a different genome file) to show variation.
-echo "Creating reference (k=75)..."
 python3 ../main.py -t reference \
     -g ../example_simulated_data/example_ref_mid_clean.fa \
     -k 75 \
@@ -31,7 +32,6 @@ ls -lath mid_REFERENCEFILE75.kdb
 
 #
 # 4. Create a reference with k=75 for small to continue example.
-echo "Creating reference (k=75)..."
 python3 ../main.py -t reference \
     -g ../example_simulated_data/example_ref_small_clean.fa \
     -k 75 \
@@ -40,7 +40,6 @@ ls -lath REFERENCEFILE75.kdb
 
 #
 # 5. Create an alignment using the k=75 reference file and a small FASTQ file.
-echo "Aligning reads using REFERENCEFILE75.kdb..."
 python3 ../main.py -t align \
     -r REFERENCEFILE75.kdb \
     -a ALIGNFILE_small_k75.aln \
@@ -50,20 +49,17 @@ ls -lath ALIGNFILE_small_k75.aln
 
 #
 # 6. Dump the alignment summary from the alignment file.
-echo "Dumping alignment summary from ALIGNFILE_small_k75.aln..."
 python3 ../main.py -t dumpalign \
     -a  ALIGNFILE_small_k75.aln
 
 #
 # 7. Dump the alignment summary straight from reference.
-echo "Dumping alignment summary from ALIGNFILE_small_k75.aln..."
 python3 ../main.py -t dumpalign \
     -r ./REFERENCEFILE75.kdb \
     --reads ../example_simulated_data/small_example_se_k75_n1000.fq
 
 #
 # 8. Run alignment with quality filtering flags (min-read-quality, min-kmer-quality, max-genomes).
-echo "Aligning with quality filters (min-read-quality=50, min-kmer-quality=60, max-genomes=2)..."
 python3 ../main.py -t dumpalign \
     -g ../example_simulated_data/example_ref_mid_clean.fa \
     -k 150 \
@@ -74,8 +70,8 @@ python3 ../main.py -t dumpalign \
 ls -lath align_mid_150_flags
 
 #
-# 9. Run alignment with quality filtering flags (min-read-quality, min-kmer-quality, max-genomes), show that max genomes impacts.
-echo "Aligning with quality filters (min-read-quality=50, min-kmer-quality=60, max-genomes=2)..."
+# 9. Run alignment with quality filtering flags (min-read-quality, min-kmer-quality, max-genomes),
+# show that max genomes impacts.
 python3 ../main.py -t dumpalign \
     -g ../example_simulated_data/example_ref_mid_clean.fa \
     -k 150 \
@@ -87,11 +83,38 @@ ls -lath align_mid_150_flags_nop
 
 #
 # 10. Create a reference with filtering enabled (EXTSIM) using a small clean reference.
-# notice substring of kmer CAGCTTCAG
-echo "Creating filtered reference (filter-similar with similarity-threshold=0.5)..."
+# Goto bottom, find "genome10_plusG4_40p_g4", notice substring of kmer CAGCTTCAG in file
+# smpref_T4_7uniq_3ambig_genome.fa
 python3 ../main.py -t dumpref \
          -g ./smpref_T4_7uniq_3ambig_genome.fa \
          -k 31 \
          --filter-similar \
         --similarity-threshold 0.75 > align_2_with_similiarity_filters
 ls -lath align_2_with_similiarity_filters
+
+#
+# 11. All at once, including different m, p!
+python3 ../main.py -t dumpalign \
+    -g ./smpref_T5_5uniq_1k_genome.fa \
+    -k 31 \
+    --reads ./smpref_T5_5uniq_1k_genometile.fq \
+    --min-read-quality 59 \
+    --min-kmer-quality 60 \
+    --max-genomes 2 \
+    -m 1 \
+    -p 1 > align_ambig_31_flags_final
+
+python3 ../main.py -t dumpalign \
+    -g ./smpref_T5_5uniq_1k_genome.fa \
+    -k 31 \
+    --reads ./smpref_T5_5uniq_1k_genometile.fq \
+    -m 1 \
+    -p 1 > align_ambig_31_flags_final
+
+python3 ../main.py -t dumpalign \
+    -g ./smpref_T5_5uniq_1k_genome.fa \
+    -k 31 \
+    --reads ./smpref_T5_5uniq_1k_genometile.fq \
+    -m 5 \
+    -p 1 > align_ambig_31_flags_final
+ls -lath align_ambig_31_flags_final

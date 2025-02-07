@@ -31,7 +31,6 @@ My bioinformatics project is structured around a modular, object-oriented design
   - The `KmerReference` class is responsible for extracting k-mers from genome sequences and organizing their positions using dictionaries and sets for efficient lookup.  
   - The `PseudoAlignment` class handles the mapping of sequencing reads to reference genomes by leveraging the k-mer reference.
   - The `Read` class represents a single read and handles most of the algorithmic burde, including aligning the read to a `KmerReference`  
-  - **EXTQUALITY Integration:** The EXTQUALITY extension was incorporated directly into the pseudo-alignment workflow. New parameters (`--min-read-quality`, `--min-kmer-quality`, and `--max-genomes`) enable quality filtering at both the read level and the individual k-mer level. These filters are implemented as additional methods and conditions within the existing OOP structure, ensuring that the public API remains unchanged while extending functionality.
 
 * **File I/O Module - data_file.py:**  
   The project defines an abstract `DataFile` class with concrete subclasses (`FASTAFile` and `FASTAQFile`) that manage file input/output. These classes support both plain text and gzip-compressed files. This design provides a consistent interface for reading and writing data, making it easier to add support for additional file formats in the future.

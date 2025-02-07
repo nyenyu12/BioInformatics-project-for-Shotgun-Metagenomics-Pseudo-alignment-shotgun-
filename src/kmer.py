@@ -205,7 +205,6 @@ class KmerReference(object):
             for kept_genome_id, kept_kmers in kept:
                 min_count = min(len(current_kmers), len(kept_kmers))
                 sim_score = (len(current_kmers.intersection(kept_kmers)) / min_count) if min_count > 0 else 0
-                print (sim_score, genome_id, kept_genome_id, similarity_threshold)
                 if sim_score > similarity_threshold:
                     similarity_info[genome_id] = {
                         "kept": "no",
@@ -482,8 +481,8 @@ class Read:
 
     def pseudo_align(self,
                      kmer_reference: KmerReference,
-                     p: int = 1,
                      m: int = 1,
+                     p: int = 1,
                      min_read_quality: Optional[int] = None,
                      min_kmer_quality: Optional[int] = None,
                      max_genomes: Optional[int] = None,
@@ -491,8 +490,8 @@ class Read:
         """
         @brief Performs pseudo-alignment applying quality and redundancy filters.
         @param kmer_reference The KmerReference instance.
-        @param p Ambiguity threshold.
         @param m Unique mapping threshold.
+        @param p Ambiguity threshold.
         @param min_read_quality Optional minimum read quality threshold.
         @param min_kmer_quality Optional minimum k-mer quality threshold.
         @param max_genomes Optional maximum allowed genome mappings for a k-mer.
@@ -500,8 +499,8 @@ class Read:
         @return The resulting ReadMappingType.
         """
         if not (isinstance(kmer_reference, KmerReference)
-                and isinstance(p, int)
                 and isinstance(m, int)
+                and isinstance(p, int)
                 and (min_read_quality is None or isinstance(min_read_quality, int))
                 and (min_kmer_quality is None or isinstance(min_kmer_quality, int))
                 and (max_genomes is None or isinstance(max_genomes, int))

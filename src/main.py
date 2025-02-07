@@ -159,14 +159,14 @@ def build_reference_and_dump_from_file(fasta_file: str, kmer_size: int,
 ## ===========================================================
 
 def create_alignment_from_reference(kmer_reference: KmerReference, reads_file: str,
-                                      p: int, m: int, min_read_quality: int,
+                                      m: int, p: int, min_read_quality: int,
                                       min_kmer_quality: int, max_genomes: int) -> PseudoAlignment:
     """
     @brief Creates a pseudo-alignment from a k-mer reference and a FASTQ file.
     @param kmer_reference A KmerReference instance.
     @param reads_file Path to the FASTQ file.
-    @param p Ambiguity threshold.
     @param m Unique mapping threshold.
+    @param p Ambiguity threshold.
     @param min_read_quality Minimum read quality threshold.
     @param min_kmer_quality Minimum k-mer quality threshold.
     @param max_genomes Maximum allowed genome mappings for a k-mer.
@@ -174,13 +174,13 @@ def create_alignment_from_reference(kmer_reference: KmerReference, reads_file: s
     """
     reads_container = FASTAQFile(reads_file).container
     pseudo_alignment = PseudoAlignment(kmer_reference)
-    pseudo_alignment.align_reads_from_container(reads_container, p, m,
+    pseudo_alignment.align_reads_from_container(reads_container, m, p,
                                                 min_read_quality, min_kmer_quality, max_genomes)
     return pseudo_alignment
 
 
 def create_alignment_file_from_reference(kmer_reference: KmerReference, reads_file: str,
-                                           align_file: str, p: int, m: int,
+                                           align_file: str, m: int, p: int,
                                            min_read_quality: int, min_kmer_quality: int,
                                            max_genomes: int) -> None:
     """
@@ -188,20 +188,20 @@ def create_alignment_file_from_reference(kmer_reference: KmerReference, reads_fi
     @param kmer_reference A KmerReference instance.
     @param reads_file Path to the FASTQ file.
     @param align_file Output file path.
-    @param p Ambiguity threshold.
     @param m Unique mapping threshold.
+    @param p Ambiguity threshold.
     @param min_read_quality Minimum read quality threshold.
     @param min_kmer_quality Minimum k-mer quality threshold.
     @param max_genomes Maximum allowed genome mappings for a k-mer.
     @return None.
     """
-    pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, p, m,
+    pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, m, p,
                                                        min_read_quality, min_kmer_quality, max_genomes)
     pseudo_alignment.save(align_file)
 
 
 def create_alignment_from_reference_file(reference_file: str, reads_file: str,
-                                           align_file: str, p: int, m: int,
+                                           align_file: str, m: int, p: int,
                                            min_read_quality: int, min_kmer_quality: int,
                                            max_genomes: int) -> None:
     """
@@ -209,8 +209,8 @@ def create_alignment_from_reference_file(reference_file: str, reads_file: str,
     @param reference_file Path to the k-mer reference file.
     @param reads_file Path to the FASTQ reads file.
     @param align_file Output alignment file path.
-    @param p Ambiguity threshold.
     @param m Unique mapping threshold.
+    @param p Ambiguity threshold.
     @param min_read_quality Minimum read quality threshold.
     @param min_kmer_quality Minimum k-mer quality threshold.
     @param max_genomes Maximum allowed genome mappings for a k-mer.
@@ -220,7 +220,7 @@ def create_alignment_from_reference_file(reference_file: str, reads_file: str,
         kmer_reference = KmerReference.load(reference_file)
     except gzip.BadGzipFile:
         sys.exit("Error: Incorrect format of input file.")
-    create_alignment_file_from_reference(kmer_reference, reads_file, align_file, p, m,
+    create_alignment_file_from_reference(kmer_reference, reads_file, align_file, m, p,
                                            min_read_quality, min_kmer_quality, max_genomes)
 
 
@@ -246,7 +246,7 @@ def build_reference_and_create_alignment_file(fasta_file: str, kmer_size: int,
     @return None.
     """
     kmer_reference = create_reference(fasta_file, kmer_size, filter_similar, similarity_threshold)
-    create_alignment_file_from_reference(kmer_reference, reads_file, align_file, p, m,
+    create_alignment_file_from_reference(kmer_reference, reads_file, align_file, m, p,
                                            min_read_quality, min_kmer_quality, max_genomes)
 
 
@@ -281,8 +281,7 @@ def dump_alignment_from_reference(reference_file: str, reads_file: str,
         kmer_reference = KmerReference.load(reference_file)
     except gzip.BadGzipFile:
         sys.exit("Error: Incorrect format of input file.")
-    #print (list(kmer_reference.kmers))
-    pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, p, m,
+    pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, m, p,
                                                        min_read_quality, min_kmer_quality, max_genomes)
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
 
@@ -306,7 +305,7 @@ def build_reference_align_and_dump(fasta_file: str, kmer_size: int, reads_file: 
     @return None.
     """
     kmer_reference = create_reference(fasta_file, kmer_size, filter_similar, similarity_threshold)
-    pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, p, m,
+    pseudo_alignment = create_alignment_from_reference(kmer_reference, reads_file, m, p,
                                                        min_read_quality, min_kmer_quality, max_genomes)
     print(json.dumps(pseudo_alignment.get_summary(), indent=4))
 
@@ -399,7 +398,7 @@ def main() -> None:
             sys.exit("Error: Unsupported task.")
     except gzip.BadGzipFile:
         sys.exit("Error: Incorrect format of input file.")
-    except (InvalidExtensionError, NoRecordsInDataFile, NotValidatingUniqueMapping, AddingExistingRead) as err:
+    except (InvalidExtensionError, NoRecordsInDataFile, NotValidatingUniqueMapping, AddingExistingRead, ValueError) as err:
         sys.exit(err)
 
 
